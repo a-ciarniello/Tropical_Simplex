@@ -154,10 +154,18 @@ class TropicalNumericMinPlus(NumericBase):
         return np.add.reduce([x] * n)
 
     def compare(self, x, y):
+        """Compare in usual sense (not tropical order)."""
         if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-            return np.where(x > y, 1, np.where(x < y, -1, 0))
+            # Per array, restituiamo il primo elemento della comparazione
+            result = np.where(x > y, 1, np.where(x < y, -1, 0))
+            return int(np.asarray(result).flat[0])
         else:
-            return int((x > y) - (x < y))
+            if x > y:
+                return 1
+            elif x < y:
+                return -1
+            else:
+                return 0
 
     def of_int(self, x): return float(x)
     def of_string(self, s): return float(s)
