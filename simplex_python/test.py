@@ -1,7 +1,7 @@
 from numeric import get
 from group import GroupFromNumeric
 
-Num = get("tropical_min_plus")    # carica algebra min-plus
+Num = get("tropical_min_plus") 
 G = GroupFromNumeric(Num)
 
 a, b = 2.0, 5.0

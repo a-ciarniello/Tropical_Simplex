@@ -4,7 +4,6 @@ from fractions import Fraction
 from typing import Any, Dict, Type
 
 class NumericBase:
-    """Base class replicating the OCaml Numeric.T signature."""
 
     zero: Any
 
@@ -33,7 +32,7 @@ class NumericInt(NumericBase):
     def add(self, x, y): return x + y
     def neg(self, x): return -x
     def mul(self, x, y): return x * y
-    def div(self, x, y): return x // y  # integer division
+    def div(self, x, y): return x // y
     def pow(self, x, n): return x ** n
     def compare(self, x, y): return (x > y) - (x < y)
 
@@ -43,7 +42,7 @@ class NumericInt(NumericBase):
 
 
 # ==========================================================
-# Cast of OCAML_FLOAT in NumericFloat (NumPy-based)
+# Cast of OCAML_FLOAT in NumericFloat
 # ==========================================================
 class NumericFloat(NumericBase):
     zero = 0.0
@@ -56,7 +55,7 @@ class NumericFloat(NumericBase):
     def div(self, x, y): return np.divide(x, y)
     def pow(self, x, n): return np.power(x, n)
     def compare(self, x, y):
-        return int((x > y) - (x < y))  # scalar fallback if needed
+        return int((x > y) - (x < y))
 
     def of_int(self, x): return float(x)
     def of_string(self, s): return float(s)
@@ -64,7 +63,7 @@ class NumericFloat(NumericBase):
 
 
 # ==========================================================
-#  Cast of OCAML_BIG_INT in NumericBigInt (based on Python int)
+#  Cast of OCAML_BIG_INT in NumericBigInt
 # ==========================================================
 class NumericBigInt(NumericBase):
     zero = 0
@@ -74,7 +73,7 @@ class NumericBigInt(NumericBase):
     def add(self, x, y): return x + y
     def neg(self, x): return -x
     def mul(self, x, y): return x * y
-    def div(self, x, y): return x // y  # integer division
+    def div(self, x, y): return x // y  
     def pow(self, x, n): return pow(x, n)
     def compare(self, x, y): return (x > y) - (x < y)
 
@@ -84,7 +83,7 @@ class NumericBigInt(NumericBase):
 
 
 # ==========================================================
-# Cast of OCAML_BIG_RAT in NumericBigRat (based on fractions.Fraction)
+# Cast of OCAML_BIG_RAT in NumericBigRat
 # ==========================================================
 class NumericBigRat(NumericBase):
     zero = Fraction(0, 1)
@@ -126,37 +125,29 @@ class TropicalNumericMinPlus(NumericBase):
     zero = np.inf  # tropical additive identity
     one = 0.0      # multiplicative identity
 
-    def max(self, x, y):  # sometimes used for comparisons
+    def max(self, x, y): 
         return np.maximum(x, y)
 
     def min(self, x, y):
         return np.minimum(x, y)
 
     def add(self, x, y):
-        """Tropical addition: min(x, y)."""
         return np.minimum(x, y)
 
     def neg(self, x):
-        """No proper additive inverse in tropical algebra.
-        We'll define it as 'raise' for safety."""
         raise NotImplementedError("Tropical semiring has no additive inverse")
 
     def mul(self, x, y):
-        """Tropical multiplication: x + y."""
         return np.add(x, y)
 
     def div(self, x, y):
-        """Tropical division: x - y (since multiplication is +)."""
         return np.subtract(x, y)
 
     def pow(self, x, n):
-        """Repeated tropical multiplication: n * x"""
         return np.add.reduce([x] * n)
 
     def compare(self, x, y):
-        """Compare in usual sense (not tropical order)."""
         if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-            # Per array, restituiamo il primo elemento della comparazione
             result = np.where(x > y, 1, np.where(x < y, -1, 0))
             return int(np.asarray(result).flat[0])
         else:
@@ -187,7 +178,7 @@ NUMERIC_MODULES: Dict[str, Type[NumericBase]] = {
 
 def get(name: str) -> NumericBase:
     try:
-        return NUMERIC_MODULES[name]()  # return instance
+        return NUMERIC_MODULES[name]()
     except KeyError:
         raise ValueError(f"{name}: unknown type of numerical data")
 

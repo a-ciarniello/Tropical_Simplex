@@ -5,7 +5,7 @@ import numeric, group
 from typing import Optional, Callable, List, Tuple, Dict, Any, Protocol, Iterable, TextIO
 import numpy as np
 
-# ---------- Interfaces (contratti) ----------
+# ---------- Interfaces----------
 class LPProto(Protocol):
     def dim(self) -> int: ...
     # ecc.
@@ -25,7 +25,7 @@ class SimpletProto(Protocol):
     def print(self, inst: "SimpletProto.Instance",
               log: Optional[TextIO]) -> None: ...
 
-# ---------- Glue per i moduli (factory stile functor) ----------
+# ---------- Glue for modules ----------
 class LinearProg:
     def __init__(self, group: group.OrderedGroup):
         self.G = group
@@ -65,20 +65,21 @@ class PerturbedLP:
         raise NotImplementedError
 
     def phaseI(self, lp: LP) -> Tuple[LP, np.ndarray]:
-        # TODO: costruisci LP di fase I e base iniziale
+        # TODO
         raise NotImplementedError
 
     def phaseII(self, lp: LP) -> LP:
-        # TODO: costruisci LP di fase II
+        # TODO
         raise NotImplementedError
 
     def print(self, lp: LP, log: Optional[TextIO]) -> None:
         lp.pretty_print(log)
 
     def project(self, x: Any) -> Optional[Any]:
-        # In OCaml: Some (proiezione) / None. In Python: Optional
-        # TODO: implementa la proiezione
-        return x  # placeholder
+        # In OCaml: Some (proiezione) / None. 
+        # In Python: Optional
+        # TODO
+        return x 
 
 class Simplet:
     """Tropical simplex parametrico su LP."""
@@ -89,32 +90,32 @@ class Simplet:
     class Instance(SimpletProto.Instance):
         lp: LP
         basis: np.ndarray
-        # aggiungi ciò che serve
+        
 
     def init(self, lp: LP, basic_point: np.ndarray) -> "Simplet.Instance":
         return Simplet.Instance(lp=lp, basis=basic_point)
 
-    # ----- metodi richiesti dal main -----
+    # ----- main methods -----
 
     def bland_rule(self, *args, **kwargs):
         # TODO
         return None
 
     def solve(self, inst: "Simplet.Instance", pivot_rule: Callable, log: Optional[TextIO]) -> None:
-        # TODO: implementa il ciclo del simplesso tropicale
+        # TODO
         pass
 
     def basic_point(self, inst: "Simplet.Instance") -> np.ndarray:
-        # TODO: restituisci il punto di base corrente
+        # TODO
         return np.zeros(inst.lp.dim())
 
     def basis_contains(self, inst: "Simplet.Instance", row: int) -> bool:
-        # TODO: controlla se la riga 'row' è in base
+        # TODO
         return False
 
     def red_cost(self, inst: "Simplet.Instance", row: int) -> Optional[Tuple[str, Any]]:
-        # TODO: calcola reduced cost della riga
-        # ritorna ad es. ("Pos", value) | ("Neg", value) | None
+        # TODO
+        # ritorna ("Pos", value) | ("Neg", value) | None
         return ("Pos", 0)
 
     def pivot(self, inst: "Simplet.Instance", row: int) -> None:
@@ -132,13 +133,13 @@ class Simplet:
 def lexer_from_file(fp: str):
     # In OCaml: Lexing.from_channel
     # In Python: restituisci un oggetto/iteratore su token
-    # TODO: integra PLY/Lark
+    # TODO
     with open(fp, "r", encoding="utf-8") as f:
         return f.read()
 
 def lexer_header(lexbuf: str) -> Tuple[str, Dict[str, int]]:
     # OCaml: Lexer.header -> (numeric_name, var_names)
-    # TODO: implementa la stessa semantica della tua grammatica
+    # TODO
     raise NotImplementedError
 
 class Parser:
@@ -156,50 +157,48 @@ class Solution(Enum):
     UNBOUNDED = "Unbounded"
     OPTIMUM = "Optimum"
 
-# ---------- Porting di main ----------
+# ---------- main porting ----------
 
 def run_main(input_filename: str,
              verbose: bool = False,
              log_file_name: str = "log") -> Tuple[Solution, np.ndarray]:
 
-    # 1) lexer buffer
+
     lexbuf = lexer_from_file(input_filename)
 
-    # 2) header
+
     try:
         numeric_name, var_names = lexer_header(lexbuf)
     except Exception as e:
         raise RuntimeError(f"lexer error while reading header: {e}") from e
 
-    # 3) dinamica Numeric + Parser parametrico
+ 
     Num = numeric.get(numeric_name)
     Parse = Parser(Num)
 
-    # 4) parsing problema
     try:
-        obj, ineq, basic_point_list = Parse.main(lexbuf)  # oppure passa token_stream
+        obj, ineq, basic_point_list = Parse.main(lexbuf) 
     except Exception as e:
-        # distingui tra lexer/syntax se vuoi messaggi più fini
         raise RuntimeError(f"parse error: {e}") from e
 
     print("input file parsed")
 
-    # 5) moduli dipendenti
+  
     G = group.GroupFromNumeric(Num)
 
     LPmod = LinearProg(G)
 
     nb_var = len(var_names)
-    # array di nomi variabili indicizzabile per j
+
     var_names_array: List[str] = [""] * nb_var
     for name, idx in var_names.items():
         var_names_array[idx] = name
     var_names_fun = lambda j: var_names_array[j]
 
-    # 6) costruzione LP
+ 
     lp: LP = LPmod.init(var_names_fun, nb_var, obj, ineq)
 
-    # 7) logging
+
     log: Optional[TextIO] = open(log_file_name, "w", encoding="utf-8") if verbose else None
     try:
         if log:
@@ -210,7 +209,7 @@ def run_main(input_filename: str,
 
         if basic_point_given:
             # ----- Caso: base fornita -> Fase II diretta -----
-            basic_point = np.array(basic_point_list)  # Converte lista in array NumPy
+            basic_point = np.array(basic_point_list)
             Simp = Simplet(LPmod)
             phaseII = Simp.init(lp, basic_point)
 
@@ -232,7 +231,7 @@ def run_main(input_filename: str,
                 print("\n------------------\nphaseI lp:\n", file=log)
             PertLP.print(phaseI_lp, log)
 
-            SimpletI = Simplet(PertLP)  # in OCaml: Simplet.Make(PertLP)
+            SimpletI = Simplet(PertLP) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
             print("solving phaseI")
@@ -252,7 +251,7 @@ def run_main(input_filename: str,
                 print("\n---------\nphaseII lp:\n", file=log)
             PertLP.print(phaseII_lp, log)
 
-            phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()]  # Slicing NumPy
+            phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
             SimpletII = Simplet(PertLP)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
