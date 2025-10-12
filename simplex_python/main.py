@@ -1,20 +1,17 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-import numeric, group
+import numeric, group, linear_prog, parser
 from typing import Optional, Callable, List, Tuple, Dict, Any, Protocol, Iterable, TextIO
 import numpy as np
 
-# ---------- Interfaces----------
-class LPProto(Protocol):
-    def dim(self) -> int: ...
-    # ecc.
+
 
 class SimpletProto(Protocol):
     @dataclass
     class Instance:
         pass
-    def init(self, lp: LPProto, basic_point: np.ndarray) -> "SimpletProto.Instance": ...
+    def init(self, lp: "LP", basic_point: np.ndarray) -> "SimpletProto.Instance": ...
     def solve(self, inst: "SimpletProto.Instance",
               pivot_rule: Callable, log: Optional[TextIO]) -> None: ...
     def bland_rule(self, *args, **kwargs): ...
@@ -24,32 +21,16 @@ class SimpletProto(Protocol):
     def pivot(self, inst: "SimpletProto.Instance", row: int) -> None: ...
     def print(self, inst: "SimpletProto.Instance",
               log: Optional[TextIO]) -> None: ...
+    
 
-# ---------- Glue for modules ----------
 class LinearProg:
     def __init__(self, group: group.OrderedGroup):
-        self.G = group
+        self._impl = linear_prog.LinearProg(group)
+    def init(self, var_names, nb_var, obj, ineq):
+        return self._impl.init(var_names, nb_var, obj, ineq)
 
-    def init(self, var_names: Callable[[int], str], nb_var: int, obj, ineq) -> "LP":
-        # TODO: costruisci la struttura dell'LP
-        return LP(nb_var=nb_var, var_names=var_names, obj=obj, ineq=ineq, G=self.G)
-
-@dataclass
-class LP(LPProto):
-    nb_var: int
-    var_names: Callable[[int], str]
-    obj: Any
-    ineq: Any
-    G: group.OrderedGroup
-
-    def dim(self) -> int:
-        return self.nb_var
-
-    def pretty_print(self, log: Optional[TextIO]) -> None:
-        out = log if log is not None else open('/dev/null', 'w')
-        print(f"LP(dim={self.nb_var})", file=out)
-        if log is None:
-            out.close()
+# Use the LP class from linear_prog module
+LP = linear_prog.LP
 
 class PerturbedLP:
     def __init__(self, lp_mod: LinearProg):
@@ -73,7 +54,7 @@ class PerturbedLP:
         raise NotImplementedError
 
     def print(self, lp: LP, log: Optional[TextIO]) -> None:
-        lp.pretty_print(log)
+        lp.pretty_print()
 
     def project(self, x: Any) -> Optional[Any]:
         # In OCaml: Some (proiezione) / None. 
@@ -131,24 +112,22 @@ class Simplet:
 # ---------- Lexer/Parser placeholders ----------
 
 def lexer_from_file(fp: str):
-    # In OCaml: Lexing.from_channel
-    # In Python: restituisci un oggetto/iteratore su token
-    # TODO
+    """Legge il file LP e restituisce il contenuto"""
     with open(fp, "r", encoding="utf-8") as f:
         return f.read()
 
 def lexer_header(lexbuf: str) -> Tuple[str, Dict[str, int]]:
-    # OCaml: Lexer.header -> (numeric_name, var_names)
-    # TODO
-    raise NotImplementedError
+    """Parsing dell'header per ottenere numeric_name e var_names"""
+    return parser.lexer_header(lexbuf)
 
 class Parser:
     def __init__(self, Num: numeric.NumericBase):
         self.Num = Num
+        self._parser = parser.Parser(Num)
 
-    def main(self, token_stream) -> Tuple[Any, Any, np.ndarray]:
-        # OCaml: Parse.main Lexer.token stdinbuf -> (obj, ineq, basic_point_list)
-        raise NotImplementedError
+    def main(self, content: str) -> Tuple[Any, Any, np.ndarray]:
+        """Parsing completo del file LP"""
+        return self._parser.main(content)
 
 # ---------- Esiti ----------
 
@@ -203,7 +182,7 @@ def run_main(input_filename: str,
     try:
         if log:
             print("\n parsed lp\n", file=log)
-        lp.pretty_print(log)
+        lp.pretty_print()
 
         basic_point_given = basic_point_list.size > 0 if hasattr(basic_point_list, 'size') else len(basic_point_list) > 0
 

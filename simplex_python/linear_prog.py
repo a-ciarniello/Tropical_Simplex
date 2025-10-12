@@ -77,7 +77,7 @@ class LP:
         elif kind == ColKind.VAR:
             if idx is None:
                 raise ValueError("Variable index cannot be None")
-            return self.G.add(entry, point[idx])
+            return entry + point[idx]  # Regular addition for coefficient computation
 
     def compute_slack_args(self, row_index: RowIndex, point: np.ndarray):
         row = self.get_row(row_index)
@@ -93,7 +93,7 @@ class LP:
                 cmp_val = self.G.compare(slack, old_slack)
                 if cmp_val == 0:
                     result.append((col_index, sign, entry))
-                elif cmp_val == 1:
+                elif cmp_val == -1:  # slack < old_slack → new minimum found
                     result = [(col_index, sign, entry)]
         return result
 
@@ -145,11 +145,11 @@ class LinearProg:
         objective: List[Tuple[ColIndex, Sign, Any]],
         ineqs: List[List[Tuple[ColIndex, Sign, Any]]],
     ) -> LP:
-        # Costruisce colonne e righe simili all’OCaml
+        
         vars_cols: List[List[Tuple[RowIndex, Sign, Any]]] = [[] for _ in range(nb_var)]
         affine_col: List[Tuple[RowIndex, Sign, Any]] = []
 
-        # Popola le colonne a partire dalle righe di input
+        
         def process_input_row(row_index: RowIndex, w_i):
             for col_index, sign, entry in w_i:
                 if col_index[0] == ColKind.AFFINE:

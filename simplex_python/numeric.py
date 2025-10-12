@@ -6,6 +6,7 @@ from typing import Any, Dict, Type
 class NumericBase:
 
     zero: Any
+    one: Any
 
     def max(self, x, y): raise NotImplementedError
     def min(self, x, y): raise NotImplementedError
@@ -26,6 +27,7 @@ class NumericBase:
 # ==========================================================
 class NumericInt(NumericBase):
     zero = 0
+    one = 1
 
     def max(self, x, y): return max(x, y)
     def min(self, x, y): return min(x, y)
@@ -46,6 +48,7 @@ class NumericInt(NumericBase):
 # ==========================================================
 class NumericFloat(NumericBase):
     zero = 0.0
+    one = 1.0
 
     def max(self, x, y): return np.maximum(x, y)
     def min(self, x, y): return np.minimum(x, y)
@@ -67,6 +70,7 @@ class NumericFloat(NumericBase):
 # ==========================================================
 class NumericBigInt(NumericBase):
     zero = 0
+    one = 1
 
     def max(self, x, y): return max(x, y)
     def min(self, x, y): return min(x, y)
@@ -87,6 +91,7 @@ class NumericBigInt(NumericBase):
 # ==========================================================
 class NumericBigRat(NumericBase):
     zero = Fraction(0, 1)
+    one = Fraction(1, 1)
 
     def max(self, x, y): return x if x >= y else y
     def min(self, x, y): return x if x <= y else y
@@ -147,10 +152,137 @@ class TropicalNumericMinPlus(NumericBase):
         return np.add.reduce([x] * n)
 
     def compare(self, x, y):
+        """Compare two values/arrays element-wise.
+        For arrays, uses lexicographic ordering (compares first differing element).
+        Returns: 1 if x > y, -1 if x < y, 0 if x == y
+        """
         if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-            result = np.where(x > y, 1, np.where(x < y, -1, 0))
-            return int(np.asarray(result).flat[0])
+            # Convert both to arrays for consistent handling
+            x_arr = np.asarray(x)
+            y_arr = np.asarray(y)
+            
+            # Handle same-shaped arrays with element-wise comparison
+            if x_arr.shape == y_arr.shape:
+                x_flat = x_arr.flatten()
+                y_flat = y_arr.flatten()
+                
+                # Lexicographic comparison: find first differing element
+                for i in range(len(x_flat)):
+                    if x_flat[i] > y_flat[i]:
+                        return 1
+                    elif x_flat[i] < y_flat[i]:
+                        return -1
+                return 0  # All elements are equal
+            else:
+                # Different shapes: compare by broadcasting rules
+                # This is a fallback for when shapes don't match
+                try:
+                    diff = x_arr - y_arr
+                    diff_flat = diff.flatten()
+                    for val in diff_flat:
+                        if val > 0:
+                            return 1
+                        elif val < 0:
+                            return -1
+                    return 0
+                except (ValueError, TypeError):
+                    # If subtraction fails, compare sizes as last resort
+                    if x_arr.size > y_arr.size:
+                        return 1
+                    elif x_arr.size < y_arr.size:
+                        return -1
+                    else:
+                        return 0
         else:
+            # Scalar comparison
+            if x > y:
+                return 1
+            elif x < y:
+                return -1
+            else:
+                return 0
+
+    def of_int(self, x): return float(x)
+    def of_string(self, s): return float(s)
+    def to_string(self, x): return str(x)
+
+# ==========================================================
+# Tropical semiring: max-plus algebra
+# ==========================================================
+
+class TropicalNumericMaxPlus(NumericBase):
+    """Implements tropical (max,+) semiring:
+    ⊕ = max, ⊗ = +, zero = -∞, one = 0
+    """
+
+    zero = -np.inf  # tropical additive identity
+    one = 0.0       # multiplicative identity
+
+    def max(self, x, y):
+        return np.maximum(x, y)
+
+    def min(self, x, y):
+        return np.minimum(x, y)
+
+    def add(self, x, y):
+        return np.maximum(x, y)
+
+    def neg(self, x):
+        raise NotImplementedError("Tropical semiring has no additive inverse")
+
+    def mul(self, x, y):
+        return np.add(x, y)
+
+    def div(self, x, y):
+        return np.subtract(x, y)
+
+    def pow(self, x, n):
+        return np.add.reduce([x] * n)
+
+    def compare(self, x, y):
+        """Compare two values/arrays element-wise.
+        For arrays, uses lexicographic ordering (compares first differing element).
+        Returns: 1 if x > y, -1 if x < y, 0 if x == y
+        """
+        if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
+            # Convert both to arrays for consistent handling
+            x_arr = np.asarray(x)
+            y_arr = np.asarray(y)
+            
+            # Handle same-shaped arrays with element-wise comparison
+            if x_arr.shape == y_arr.shape:
+                x_flat = x_arr.flatten()
+                y_flat = y_arr.flatten()
+                
+                # Lexicographic comparison: find first differing element
+                for i in range(len(x_flat)):
+                    if x_flat[i] > y_flat[i]:
+                        return 1
+                    elif x_flat[i] < y_flat[i]:
+                        return -1
+                return 0  # All elements are equal
+            else:
+                # Different shapes: compare by broadcasting rules
+                # This is a fallback for when shapes don't match
+                try:
+                    diff = x_arr - y_arr
+                    diff_flat = diff.flatten()
+                    for val in diff_flat:
+                        if val > 0:
+                            return 1
+                        elif val < 0:
+                            return -1
+                    return 0
+                except (ValueError, TypeError):
+                    # If subtraction fails, compare sizes as last resort
+                    if x_arr.size > y_arr.size:
+                        return 1
+                    elif x_arr.size < y_arr.size:
+                        return -1
+                    else:
+                        return 0
+        else:
+            # Scalar comparison
             if x > y:
                 return 1
             elif x < y:
@@ -163,7 +295,6 @@ class TropicalNumericMinPlus(NumericBase):
     def to_string(self, x): return str(x)
 
 
-
 # ==========================================================
 #  Registry -- Get() interface
 # ==========================================================
@@ -173,6 +304,7 @@ NUMERIC_MODULES: Dict[str, Type[NumericBase]] = {
     "ocaml_big_int": NumericBigInt,
     "ocaml_big_rat": NumericBigRat,
     "tropical_min_plus": TropicalNumericMinPlus,
+    "tropical_max_plus": TropicalNumericMaxPlus,
 }
 
 
