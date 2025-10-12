@@ -1,3 +1,4 @@
 /simplex_ocaml/**
 __pycache__/
 *.pyc
+*.md
