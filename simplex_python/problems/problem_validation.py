@@ -4,10 +4,10 @@ import linear_prog
 import group
 import numpy as np
 
-def test_parser_with_lp_file(filename="examples/example_2.lp"):
+def test_parser_with_lp_file(filename="problems/example_2.lp"):
     
-    """Parser testing with an actual .lp file."""
-    print(f"=== PARSER TEST: {filename} ===")
+    """Problem testing with an actual .lp file."""
+    print(f"=== PROBLEM TEST: {filename} ===")
     
     with open(filename, 'r') as f:
         content = f.read()
@@ -68,7 +68,8 @@ def test_parser_with_lp_file(filename="examples/example_2.lp"):
             print(f"   Point {point}  feasibility: {feasible}")
     else:
         print("   No basic point provided.")
-    
+
+    print("The problem has been correctly parsed ===> Problem well defined.")
     print("\n=== TEST COMPLETED ===")
 
 if __name__ == "__main__":

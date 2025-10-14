@@ -73,10 +73,14 @@ class LP:
     def compute_entry_plus_var(self, entry: Any, col_index: ColIndex, point: np.ndarray):
         kind, idx = col_index
         if kind == ColKind.AFFINE:
+            if entry is None:
+                raise ValueError("Entry cannot be None for AFFINE column")
             return entry
         elif kind == ColKind.VAR:
             if idx is None:
                 raise ValueError("Variable index cannot be None")
+            if entry is None:
+                raise ValueError("Entry cannot be None for VAR column")
             return entry + point[idx]  # Regular addition for coefficient computation
 
     def compute_slack_args(self, row_index: RowIndex, point: np.ndarray):

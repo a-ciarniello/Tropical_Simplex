@@ -1,9 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import numpy as np
+import sys
 from enum import Enum
 import numeric, group, linear_prog, parser
+from simplet import Simplet
 from typing import Optional, Callable, List, Tuple, Dict, Any, Protocol, Iterable, TextIO
-import numpy as np
+
 
 
 
@@ -62,52 +65,7 @@ class PerturbedLP:
         # TODO
         return x 
 
-class Simplet:
-    """Tropical simplex parametrico su LP."""
-    def __init__(self, lp_mod: Any):
-        self.LPmod = lp_mod
 
-    @dataclass
-    class Instance(SimpletProto.Instance):
-        lp: LP
-        basis: np.ndarray
-        
-
-    def init(self, lp: LP, basic_point: np.ndarray) -> "Simplet.Instance":
-        return Simplet.Instance(lp=lp, basis=basic_point)
-
-    # ----- main methods -----
-
-    def bland_rule(self, *args, **kwargs):
-        # TODO
-        return None
-
-    def solve(self, inst: "Simplet.Instance", pivot_rule: Callable, log: Optional[TextIO]) -> None:
-        # TODO
-        pass
-
-    def basic_point(self, inst: "Simplet.Instance") -> np.ndarray:
-        # TODO
-        return np.zeros(inst.lp.dim())
-
-    def basis_contains(self, inst: "Simplet.Instance", row: int) -> bool:
-        # TODO
-        return False
-
-    def red_cost(self, inst: "Simplet.Instance", row: int) -> Optional[Tuple[str, Any]]:
-        # TODO
-        # ritorna ("Pos", value) | ("Neg", value) | None
-        return ("Pos", 0)
-
-    def pivot(self, inst: "Simplet.Instance", row: int) -> None:
-        # TODO
-        pass
-
-    def print(self, inst: "Simplet.Instance", log: Optional[TextIO]) -> None:
-        out = log if log is not None else open('/dev/null', 'w')
-        print(f"Simplet(basis={inst.basis})", file=out)
-        if log is None:
-            out.close()
 
 # ---------- Lexer/Parser placeholders ----------
 
@@ -189,13 +147,13 @@ def run_main(input_filename: str,
         if basic_point_given:
             # ----- Caso: base fornita -> Fase II diretta -----
             basic_point = np.array(basic_point_list)
-            Simp = Simplet(LPmod)
+            Simp = Simplet(LPmod._impl)
             phaseII = Simp.init(lp, basic_point)
 
             print("applying tropical simplex method with given input basic point")
             if log: print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
 
-            Simp.solve(phaseII, Simp.bland_rule, log)
+            Simp.solve(phaseII, lambda inst: Simp.bland_rule(inst), log)
 
             opt = Simp.basic_point(phaseII)
             opt_projected = opt.copy()  # Copia l'array NumPy
@@ -210,12 +168,12 @@ def run_main(input_filename: str,
                 print("\n------------------\nphaseI lp:\n", file=log)
             PertLP.print(phaseI_lp, log)
 
-            SimpletI = Simplet(PertLP) 
+            SimpletI = Simplet(LPmod._impl) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
             print("solving phaseI")
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
-            SimpletI.solve(phaseI, SimpletI.bland_rule, log)
+            SimpletI.solve(phaseI, lambda inst: SimpletI.bland_rule(inst), log)
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
@@ -231,11 +189,11 @@ def run_main(input_filename: str,
             PertLP.print(phaseII_lp, log)
 
             phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
-            SimpletII = Simplet(PertLP)
+            SimpletII = Simplet(LPmod._impl)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
-            SimpletII.solve(phaseII, SimpletII.bland_rule, log)
+            SimpletII.solve(phaseII, lambda inst: SimpletII.bland_rule(inst), log)
 
             ub_row = PertLP.phaseII_upperbound_row(lp)
             basis_has_inf_plane = SimpletII.basis_contains(phaseII, ub_row)
@@ -254,7 +212,7 @@ def run_main(input_filename: str,
                     if log:
                         print(f" ===\n last pivot on {ub_row} to obtain a point with finite entries\n ===\n", file=log)
                     SimpletII.pivot(phaseII, ub_row)
-                    SimpletII.print(phaseII, log)
+                    SimpletII.print_status(phaseII, log)
                     opt = SimpletII.basic_point(phaseII)
                     opt_projected = np.array([PertLP.project(x) for x in opt])
                     return (Solution.OPTIMUM, opt_projected)
@@ -262,9 +220,34 @@ def run_main(input_filename: str,
         if log: log.close()
 
 if __name__ == "__main__":
-    Num = numeric.get("tropical_min_plus")
-    G = group.GroupFromNumeric(Num)
-    print("Zero:", G.zero())
-    print("Add(2,5):", G.add(2, 5))
-    print("Compare(2,5):", G.compare(2, 5))
-    print("Max(2,5):", G.max(2, 5))
+    if len(sys.argv) < 2:
+        # Test di base se non vengono forniti argomenti
+        print("Uso: python main.py <file.lp> [--verbose]")
+        print("\nTest di base del gruppo tropicale:")
+        Num = numeric.get("tropical_min_plus")
+        G = group.GroupFromNumeric(Num)
+        print("Zero:", G.zero())
+        print("Add(2,5):", G.add(2, 5))
+        print("Compare(2,5):", G.compare(2, 5))
+        print("Max(2,5):", G.max(2, 5))
+    else:
+        # Risolve il problema LP fornito
+        input_file = sys.argv[1]
+        verbose = "--verbose" in sys.argv or "-v" in sys.argv
+        
+        try:
+            solution, point = run_main(input_file, verbose)
+            print(f"\nRisultato: {solution.value}")
+            if solution == Solution.OPTIMUM:
+                print("Punto ottimo:")
+                for i, val in enumerate(point):
+                    print(f"  x{i}: {val}")
+            elif solution == Solution.INFEASIBLE:
+                print("Il problema è infattibile")
+            elif solution == Solution.UNBOUNDED:
+                print("Il problema è illimitato")
+                
+        except Exception as e:
+            print(f"Errore durante la risoluzione: {e}")
+            import traceback
+            traceback.print_exc()

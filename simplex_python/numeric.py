@@ -58,7 +58,19 @@ class NumericFloat(NumericBase):
     def div(self, x, y): return np.divide(x, y)
     def pow(self, x, n): return np.power(x, n)
     def compare(self, x, y):
-        return int((x > y) - (x < y))
+        # Gestisce sia scalari che array numpy
+        if isinstance(x, (list, np.ndarray)) or isinstance(y, (list, np.ndarray)):
+            x_val = float(x) if not isinstance(x, (list, np.ndarray)) else float(x[0]) if len(x) > 0 else 0.0
+            y_val = float(y) if not isinstance(y, (list, np.ndarray)) else float(y[0]) if len(y) > 0 else 0.0
+        else:
+            x_val, y_val = float(x), float(y)
+        
+        if x_val > y_val:
+            return 1
+        elif x_val < y_val:
+            return -1
+        else:
+            return 0
 
     def of_int(self, x): return float(x)
     def of_string(self, s): return float(s)
