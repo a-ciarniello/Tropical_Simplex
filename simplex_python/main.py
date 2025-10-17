@@ -5,26 +5,9 @@ import sys
 from enum import Enum
 import numeric, group, linear_prog, parser
 from simplet import Simplet
-from typing import Optional, Callable, List, Tuple, Dict, Any, Protocol, Iterable, TextIO
+from typing import Optional, List, Tuple, TextIO
+from perturbed_lp import PerturbedLP
 
-
-
-
-class SimpletProto(Protocol):
-    @dataclass
-    class Instance:
-        pass
-    def init(self, lp: "LP", basic_point: np.ndarray) -> "SimpletProto.Instance": ...
-    def solve(self, inst: "SimpletProto.Instance",
-              pivot_rule: Callable, log: Optional[TextIO]) -> None: ...
-    def bland_rule(self, *args, **kwargs): ...
-    def basic_point(self, inst: "SimpletProto.Instance") -> np.ndarray: ...
-    def basis_contains(self, inst: "SimpletProto.Instance", row: int) -> bool: ...
-    def red_cost(self, inst: "SimpletProto.Instance", row: int) -> Optional[Tuple[str, Any]]: ...
-    def pivot(self, inst: "SimpletProto.Instance", row: int) -> None: ...
-    def print(self, inst: "SimpletProto.Instance",
-              log: Optional[TextIO]) -> None: ...
-    
 
 class LinearProg:
     def __init__(self, group: group.OrderedGroup):
@@ -35,83 +18,29 @@ class LinearProg:
 # Use the LP class from linear_prog module
 LP = linear_prog.LP
 
-class PerturbedLP:
-    def __init__(self, lp_mod: LinearProg):
-        self.LPmod = lp_mod
-
-    # Gli identificatori di riga usati nel main OCaml:
-    def phaseI_infeasibility_var_lower_bound_row(self, lp: LP) -> int:
-        # TODO
-        raise NotImplementedError
-
-    def phaseII_upperbound_row(self, lp: LP) -> int:
-        # TODO
-        raise NotImplementedError
-
-    def phaseI(self, lp: LP) -> Tuple[LP, np.ndarray]:
-        # TODO
-        raise NotImplementedError
-
-    def phaseII(self, lp: LP) -> LP:
-        # TODO
-        raise NotImplementedError
-
-    def print(self, lp: LP, log: Optional[TextIO]) -> None:
-        lp.pretty_print()
-
-    def project(self, x: Any) -> Optional[Any]:
-        # In OCaml: Some (proiezione) / None. 
-        # In Python: Optional
-        # TODO
-        return x 
-
-
-
-# ---------- Lexer/Parser placeholders ----------
-
-def lexer_from_file(fp: str):
-    """Legge il file LP e restituisce il contenuto"""
-    with open(fp, "r", encoding="utf-8") as f:
-        return f.read()
-
-def lexer_header(lexbuf: str) -> Tuple[str, Dict[str, int]]:
-    """Parsing dell'header per ottenere numeric_name e var_names"""
-    return parser.lexer_header(lexbuf)
-
-class Parser:
-    def __init__(self, Num: numeric.NumericBase):
-        self.Num = Num
-        self._parser = parser.Parser(Num)
-
-    def main(self, content: str) -> Tuple[Any, Any, np.ndarray]:
-        """Parsing completo del file LP"""
-        return self._parser.main(content)
-
 # ---------- Esiti ----------
-
 class Solution(Enum):
     INFEASIBLE = "Infeasible"
     UNBOUNDED = "Unbounded"
     OPTIMUM = "Optimum"
 
 # ---------- main porting ----------
-
 def run_main(input_filename: str,
              verbose: bool = False,
              log_file_name: str = "log") -> Tuple[Solution, np.ndarray]:
 
 
-    lexbuf = lexer_from_file(input_filename)
+    lexbuf = parser.lexer_from_file(input_filename)
 
 
     try:
-        numeric_name, var_names = lexer_header(lexbuf)
+        numeric_name, var_names = parser.lexer_header(lexbuf)
     except Exception as e:
         raise RuntimeError(f"lexer error while reading header: {e}") from e
 
  
     Num = numeric.get(numeric_name)
-    Parse = Parser(Num)
+    Parse = parser.Parser(Num)
 
     try:
         obj, ineq, basic_point_list = Parse.main(lexbuf) 
@@ -161,12 +90,12 @@ def run_main(input_filename: str,
 
         else:
             # ----- Caso: nessuna base -> Fase I + Fase II -----
-            PertLP = PerturbedLP(LPmod)
+            PertLP = PerturbedLP(LPmod._impl)
             phaseI_lp, basic_point = PertLP.phaseI(lp)
 
             if log:
                 print("\n------------------\nphaseI lp:\n", file=log)
-            PertLP.print(phaseI_lp, log)
+            phaseI_lp.pretty_print()
 
             SimpletI = Simplet(LPmod._impl) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
@@ -186,7 +115,7 @@ def run_main(input_filename: str,
             phaseII_lp = PertLP.phaseII(lp)
             if log:
                 print("\n---------\nphaseII lp:\n", file=log)
-            PertLP.print(phaseII_lp, log)
+            phaseII_lp.pretty_print()
 
             phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
             SimpletII = Simplet(LPmod._impl)
@@ -227,9 +156,9 @@ if __name__ == "__main__":
         Num = numeric.get("tropical_min_plus")
         G = group.GroupFromNumeric(Num)
         print("Zero:", G.zero())
-        print("Add(2,5):", G.add(2, 5))
+        print("Trop Add(2,5):", G.add(2, 5))
         print("Compare(2,5):", G.compare(2, 5))
-        print("Max(2,5):", G.max(2, 5))
+        print("Trop Mux(2,5):", G.mul(2, 5))
     else:
         # Risolve il problema LP fornito
         input_file = sys.argv[1]

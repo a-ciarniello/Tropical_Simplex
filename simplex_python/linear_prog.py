@@ -81,7 +81,9 @@ class LP:
                 raise ValueError("Variable index cannot be None")
             if entry is None:
                 raise ValueError("Entry cannot be None for VAR column")
-            return entry + point[idx]  # Regular addition for coefficient computation
+            # Use multiplication (which is addition in tropical algebra)
+            # This computes coefficient * variable_value
+            return self.G.mul(entry, point[idx])
 
     def compute_slack_args(self, row_index: RowIndex, point: np.ndarray):
         row = self.get_row(row_index)

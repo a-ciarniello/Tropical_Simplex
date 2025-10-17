@@ -22,6 +22,9 @@ class AdditiveGroup:
     def neg(self, x):
         raise NotImplementedError
 
+    def mul(self, x, y):
+        raise NotImplementedError
+
     def sum(self, lst: List[Any]):
         if not lst:
             raise ValueError("sum: empty list")
@@ -70,6 +73,9 @@ class GroupFromNumeric(OrderedGroup):
     def neg(self, x):
         return self.Numeric.neg(x)
 
+    def mul(self, x, y):
+        return self.Numeric.mul(x, y)
+
     def compare(self, x, y):
         return self.Numeric.compare(x, y)
 
@@ -92,6 +98,9 @@ class IntGroup(OrderedGroup):
 
     def neg(self, x):
         return -x
+
+    def mul(self, x, y):
+        return x * y
 
     def compare(self, x, y):
         return (x > y) - (x < y)
@@ -137,9 +146,10 @@ class ReverseOrder(OrderedGroup):
 # Cartesian Product (pair)
 # ==========================================================
 @dataclass
-class CartesianProduct:
-    G: OrderedGroup
-    H: OrderedGroup
+class CartesianProduct(OrderedGroup):
+    def __init__(self, G: OrderedGroup, H: OrderedGroup):
+        self.G = G
+        self.H = H
 
     def zero(self):
         return (self.G.zero(), self.H.zero())
@@ -152,6 +162,11 @@ class CartesianProduct:
     def neg(self, a):
         g, h = a
         return (self.G.neg(g), self.H.neg(h))
+
+    def mul(self, a, b):
+        g1, h1 = a
+        g2, h2 = b
+        return (self.G.mul(g1, g2), self.H.mul(h1, h2))
 
     def compare(self, a, b):
         g1, h1 = a
@@ -182,7 +197,7 @@ class CartesianProduct:
 # Cartesian Power (sparse)
 # ==========================================================
 @dataclass
-class CartesianPowerSparse:
+class CartesianPowerSparse(OrderedGroup):
     """List of (index, value) pairs sorted by index."""
     G: OrderedGroup
 
@@ -214,6 +229,25 @@ class CartesianPowerSparse:
 
     def neg(self, x):
         return [(i, self.G.neg(v)) for i, v in x]
+
+    def mul(self, x: List[Tuple[int, Any]], y: List[Tuple[int, Any]]):
+        """Element-wise multiplication of two sparse vectors."""
+        res = []
+        i = j = 0
+        while i < len(x) and j < len(y):
+            ix, vx = x[i]
+            iy, vy = y[j]
+            if ix == iy:
+                s = self.G.mul(vx, vy)
+                if self.G.compare(s, self.G.zero()) != 0:
+                    res.append((ix, s))
+                i += 1
+                j += 1
+            elif ix < iy:
+                i += 1
+            else:
+                j += 1
+        return res
 
     def substract(self, x, y):
         return self.add(x, self.neg(y))
