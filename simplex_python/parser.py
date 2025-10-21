@@ -12,7 +12,7 @@ import numpy as np
 class ParseError(Exception):
     pass
 
-def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[float]]:
+def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[float], bool]:
     """
     Parser semplificato per file LP con formato:
     vars: x, y, z
@@ -22,6 +22,15 @@ def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[f
     maximize x + 3;
     x + 2 <= y + 4;
     basic point = 1.0, 2.0;
+    
+    Returns:
+        Tuple containing:
+        - numeric_name: str (e.g., "tropical_min_plus")
+        - var_names: Dict[str, int] (variable name to index mapping)
+        - objective: objective function terms
+        - ineqs: list of inequalities
+        - basic_point: list of floats (optional basic point)
+        - is_maximize: bool (True if maximize, False if minimize)
     """
     lines = content.strip().split('\n')
     
@@ -31,6 +40,7 @@ def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[f
     semiring = "maxplus"
     numeric_type = "float"
     objective = None
+    is_maximize = False  # Track if objective is maximize or minimize
     ineqs = []
     basic_point = []
     
@@ -60,6 +70,7 @@ def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[f
         elif state == "lp":
             if line.startswith("maximize") or line.startswith("minimize"):
                 objective = parse_objective_line(line, var_names)
+                is_maximize = line.startswith("maximize")  # Track the objective type
             elif line.startswith("basic point"):
                 basic_point = parse_basic_point_line(line)
             elif any(op in line for op in ["<=", ">="]):
@@ -75,7 +86,7 @@ def parse_simple_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[f
     else:
         numeric_name = "tropical_max_plus"
     
-    return numeric_name, var_names, objective, ineqs, basic_point
+    return numeric_name, var_names, objective, ineqs, basic_point, is_maximize
 
 def parse_objective_line(line: str, var_names: Dict[str, int]) -> List[Tuple[linear_prog.ColIndex, linear_prog.Sign, float]]:
     """Parse maximize/minimize line"""
@@ -160,38 +171,48 @@ def parse_inequality_line(line: str, var_names: Dict[str, int], semiring: str) -
     return result
 
 def parse_expression(expr: str, var_names: Dict[str, int]) -> List[Tuple[linear_prog.ColIndex, float]]:
-    """Parse simple expression like 'x + 2' or 'y + 4'"""
+    """
+    Parse simple expression like 'x + 2' or 'y + 4' or just '1'
+    Returns list of (col_index, coefficient) tuples
+    """
     terms = []
     
-    # Very simple parsing
+    # Remove whitespace for easier parsing
     expr = expr.replace(' ', '')
     
-    # Look for variables
+    # Check if expression contains any variables
+    found_var = False
     for var_name, var_idx in var_names.items():
         if var_name in expr:
+            found_var = True
             col_index = (linear_prog.ColKind.VAR, var_idx)
-            # Simple coefficient extraction
-            coeff = 0.0
-            
-            # Pattern: var + number or var - number
-            pattern = f'{var_name}\\s*([+-])\\s*(\\d+(?:\\.\\d+)?)'
-            match = re.search(pattern, expr)
-            if match:
-                sign, num = match.groups()
-                coeff = float(num) if sign == '+' else -float(num)
-            
-            terms.append((col_index, coeff))
-            # Remove this variable from expression
-            expr = re.sub(f'{var_name}\\s*[+-]?\\s*\\d*\\.?\\d*', '', expr)
+            # Variable always has coefficient 0.0 in tropical LP format
+            # The actual value comes from the point, not the coefficient
+            terms.append((col_index, 0.0))
+            # Remove the variable from expression to find constants
+            expr = expr.replace(var_name, '')
             break
     
-    # Look for standalone numbers (constants)
-    numbers = re.findall(r'[+-]?\\d*\\.?\\d+', expr)
-    if numbers:
-        const_val = sum(float(n) for n in numbers)
-        if const_val != 0:
-            col_index = (linear_prog.ColKind.AFFINE, None)
-            terms.append((col_index, const_val))
+    # Clean up the remaining expression (remove operators without operands)
+    expr = expr.strip('+-')
+    
+    # Look for constants in the remaining expression
+    if expr:
+        try:
+            # Try to parse as a number
+            const_val = float(expr)
+            if const_val != 0 or not found_var:  # Always include constant if no variable, or if non-zero
+                col_index = (linear_prog.ColKind.AFFINE, None)
+                terms.append((col_index, const_val))
+        except ValueError:
+            # Not a simple number, might have multiple terms
+            # Extract all numbers
+            numbers = re.findall(r'[+-]?\d+\.?\d*', expr)
+            if numbers:
+                const_val = sum(float(n) for n in numbers)
+                if const_val != 0 or not found_var:
+                    col_index = (linear_prog.ColKind.AFFINE, None)
+                    terms.append((col_index, const_val))
     
     return terms
 
@@ -210,9 +231,18 @@ class Parser:
     def __init__(self, Num: numeric.NumericBase):
         self.Num = Num
         
-    def main(self, content: str) -> Tuple[Any, Any, np.ndarray]:
-        """Metodo principale per parsing del file LP"""
-        numeric_name, var_names, objective, ineqs, basic_point = parse_simple_lp(content)
+    def main(self, content: str) -> Tuple[Any, Any, np.ndarray, bool]:
+        """
+        Metodo principale per parsing del file LP
+        
+        Returns:
+            Tuple containing:
+            - objective: formatted objective function
+            - ineqs: list of inequalities
+            - basic_point: numpy array of basic point
+            - is_maximize: bool (True if maximize, False if minimize)
+        """
+        numeric_name, var_names, objective, ineqs, basic_point, is_maximize = parse_simple_lp(content)
         
         # Convert to proper format
         if objective:
@@ -221,7 +251,7 @@ class Parser:
             # Default objective if none specified
             obj_formatted = [((linear_prog.ColKind.AFFINE, None), linear_prog.Sign.POS, 0.0)]
             
-        return obj_formatted, ineqs, np.array(basic_point)
+        return obj_formatted, ineqs, np.array(basic_point), is_maximize
 
 def lexer_from_file(fp: str) -> str:
     """Legge il file e restituisce il contenuto"""
@@ -230,5 +260,5 @@ def lexer_from_file(fp: str) -> str:
 
 def lexer_header(text: str) -> Tuple[str, Dict[str, int]]:
     """Parsing solo dell'header per ottenere numeric_name e var_names"""
-    numeric_name, var_names, _, _, _ = parse_simple_lp(text)
+    numeric_name, var_names, _, _, _, _ = parse_simple_lp(text)
     return numeric_name, var_names

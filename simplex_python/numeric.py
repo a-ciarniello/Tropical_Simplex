@@ -152,7 +152,9 @@ class TropicalNumericMinPlus(NumericBase):
         return np.minimum(x, y)
 
     def neg(self, x):
-        raise NotImplementedError("Tropical semiring has no additive inverse")
+        # In tropical linear programming, negation is the classical arithmetic negation
+        # This is used for computing differences like entry_slack - entry_lambda
+        return -x
 
     def mul(self, x, y):
         return np.add(x, y)
@@ -240,7 +242,9 @@ class TropicalNumericMaxPlus(NumericBase):
         return np.maximum(x, y)
 
     def neg(self, x):
-        raise NotImplementedError("Tropical semiring has no additive inverse")
+        # In tropical linear programming, negation is the classical arithmetic negation
+        # This is used for computing differences like entry_slack - entry_lambda
+        return -x
 
     def mul(self, x, y):
         return np.add(x, y)

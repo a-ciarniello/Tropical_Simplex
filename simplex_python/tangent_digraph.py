@@ -66,16 +66,21 @@ class TangentDigraph:
         for i in range(nb_ineq):
             arg = lp.compute_slack_args((linear_prog.RowKind.INEQ, i), point)
 
-            # Verifica se la disequazione è satura (ha parte + e -)
+            # Check if the inequality is saturated (has both + and -)
             has_pos = any(sign == linear_prog.Sign.POS for _, sign, _ in arg)
             has_neg = any(sign == linear_prog.Sign.NEG for _, sign, _ in arg)
 
             if not has_pos:
-                raise ValueError(f"Inequality {i} not satisfied at given point")
+                # Inequality is violated (no positive coefficients mean the constraint is not satisfied)
+                raise ValueError(f"Error while initializing tangent digraph. "
+                               f"Input point does not satisfy inequality indexed by {i}")
+            
             if has_pos and has_neg:
-                ineq_nodes[i] = arg  # nodo attivo
+                # Inequality is saturated (active) - create a hyp node
+                ineq_nodes[i] = arg  # active node
+            # If has_pos and not has_neg: inequality is satisfied but not saturated - skip it
 
-        # Costruisci i nodi variabili
+        # Build variable nodes
         for i, arcs in enumerate(ineq_nodes):
             for var_index, sign, entry in arcs:
                 if var_index[0] == linear_prog.ColKind.AFFINE:
@@ -125,15 +130,16 @@ class TangentDigraph:
         return count
 
     def is_basic_point(self) -> bool:
+        """
+        Check if the tangent digraph corresponds to a basic point.
+        A basic point must saturate exactly dim inequalities (have dim hyp nodes).
+        """
         nb_hyp = sum(1 for i in range(len(self.ineq_nodes)) if self.is_hyp_node(i))
-        nb_vars = len(self.var_nodes) + 1
-        if nb_hyp != nb_vars - 1:
-            return False
-        nb_cc = self.nb_connected_component()
-        nb_ineq = len(self.ineq_nodes)
-        if nb_cc != nb_ineq - (nb_vars - 1) + 1:
-            return False
-        return True
+        nb_vars = len(self.var_nodes) + 1  # +1 for affine variable
+        dim = nb_vars - 1  # dimension = number of non-affine variables
+        
+        # A basic point must have exactly dim saturated inequalities
+        return nb_hyp == dim
 
     # === Manipolazione del Grafo (necessari per Simplet) ===
     

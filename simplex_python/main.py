@@ -43,11 +43,12 @@ def run_main(input_filename: str,
     Parse = parser.Parser(Num)
 
     try:
-        obj, ineq, basic_point_list = Parse.main(lexbuf) 
+        obj, ineq, basic_point_list, is_maximize = Parse.main(lexbuf) 
     except Exception as e:
         raise RuntimeError(f"parse error: {e}") from e
 
     print("input file parsed")
+    print(f"Objective: {'maximize' if is_maximize else 'minimize'}")
 
   
     G = group.GroupFromNumeric(Num)
@@ -68,7 +69,7 @@ def run_main(input_filename: str,
     log: Optional[TextIO] = open(log_file_name, "w", encoding="utf-8") if verbose else None
     try:
         if log:
-            print("\n parsed lp\n", file=log)
+            print("\n parsed successfully\n", file=log)
         lp.pretty_print()
 
         basic_point_given = basic_point_list.size > 0 if hasattr(basic_point_list, 'size') else len(basic_point_list) > 0
@@ -82,7 +83,9 @@ def run_main(input_filename: str,
             print("applying tropical simplex method with given input basic point")
             if log: print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
 
-            Simp.solve(phaseII, lambda inst: Simp.bland_rule(inst), log)
+            # Select the appropriate pivot rule based on the objective direction
+            pivot_rule = Simp.get_pivot_rule_for_objective(maximize=is_maximize)
+            Simp.solve(phaseII, pivot_rule, log)
 
             opt = Simp.basic_point(phaseII)
             opt_projected = opt.copy()  # Copia l'array NumPy
@@ -102,7 +105,9 @@ def run_main(input_filename: str,
 
             print("solving phaseI")
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
-            SimpletI.solve(phaseI, lambda inst: SimpletI.bland_rule(inst), log)
+            # Phase I is always a minimization problem (finding feasibility)
+            pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
+            SimpletI.solve(phaseI, pivot_rule_phaseI, log)
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
@@ -122,7 +127,9 @@ def run_main(input_filename: str,
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
-            SimpletII.solve(phaseII, lambda inst: SimpletII.bland_rule(inst), log)
+            # Phase II uses the original objective direction
+            pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
+            SimpletII.solve(phaseII, pivot_rule_phaseII, log)
 
             ub_row = PertLP.phaseII_upperbound_row(lp)
             basis_has_inf_plane = SimpletII.basis_contains(phaseII, ub_row)
