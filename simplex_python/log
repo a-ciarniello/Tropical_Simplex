@@ -1,0 +1,1507 @@
+
+ parsed successfully
+
+
+------------------
+applying tropical simplex method with given input basic point
+
+
+iteration 1
+Simplet iteration 0
+Basis:
+  [1, 2]
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 2
+Simplet iteration 1
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 3
+Simplet iteration 2
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 4
+Simplet iteration 3
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 5
+Simplet iteration 4
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 6
+Simplet iteration 5
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 7
+Simplet iteration 6
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 8
+Simplet iteration 7
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 9
+Simplet iteration 8
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 10
+Simplet iteration 9
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 11
+Simplet iteration 10
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 12
+Simplet iteration 11
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 13
+Simplet iteration 12
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 14
+Simplet iteration 13
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 15
+Simplet iteration 14
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 16
+Simplet iteration 15
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 17
+Simplet iteration 16
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 18
+Simplet iteration 17
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 19
+Simplet iteration 18
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 20
+Simplet iteration 19
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 21
+Simplet iteration 20
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 22
+Simplet iteration 21
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 23
+Simplet iteration 22
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 24
+Simplet iteration 23
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 25
+Simplet iteration 24
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 26
+Simplet iteration 25
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 27
+Simplet iteration 26
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 28
+Simplet iteration 27
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 29
+Simplet iteration 28
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 30
+Simplet iteration 29
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 31
+Simplet iteration 30
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 32
+Simplet iteration 31
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 33
+Simplet iteration 32
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 34
+Simplet iteration 33
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 35
+Simplet iteration 34
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 36
+Simplet iteration 35
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 37
+Simplet iteration 36
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 38
+Simplet iteration 37
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 39
+Simplet iteration 38
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 40
+Simplet iteration 39
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 41
+Simplet iteration 40
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 42
+Simplet iteration 41
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 43
+Simplet iteration 42
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 44
+Simplet iteration 43
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 45
+Simplet iteration 44
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 46
+Simplet iteration 45
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 47
+Simplet iteration 46
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 48
+Simplet iteration 47
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 49
+Simplet iteration 48
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 50
+Simplet iteration 49
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 51
+Simplet iteration 50
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 52
+Simplet iteration 51
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 53
+Simplet iteration 52
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 54
+Simplet iteration 53
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 55
+Simplet iteration 54
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 56
+Simplet iteration 55
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 57
+Simplet iteration 56
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 58
+Simplet iteration 57
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 59
+Simplet iteration 58
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 60
+Simplet iteration 59
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 61
+Simplet iteration 60
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 62
+Simplet iteration 61
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 63
+Simplet iteration 62
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 64
+Simplet iteration 63
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 65
+Simplet iteration 64
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 66
+Simplet iteration 65
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 67
+Simplet iteration 66
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 68
+Simplet iteration 67
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 69
+Simplet iteration 68
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 70
+Simplet iteration 69
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 71
+Simplet iteration 70
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 72
+Simplet iteration 71
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 73
+Simplet iteration 72
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 74
+Simplet iteration 73
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 75
+Simplet iteration 74
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 76
+Simplet iteration 75
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 77
+Simplet iteration 76
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 78
+Simplet iteration 77
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 79
+Simplet iteration 78
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 80
+Simplet iteration 79
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 81
+Simplet iteration 80
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 82
+Simplet iteration 81
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 83
+Simplet iteration 82
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 84
+Simplet iteration 83
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 85
+Simplet iteration 84
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 86
+Simplet iteration 85
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 87
+Simplet iteration 86
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 88
+Simplet iteration 87
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 89
+Simplet iteration 88
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 90
+Simplet iteration 89
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 91
+Simplet iteration 90
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 92
+Simplet iteration 91
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 93
+Simplet iteration 92
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 94
+Simplet iteration 93
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 95
+Simplet iteration 94
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 96
+Simplet iteration 95
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 97
+Simplet iteration 96
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 98
+Simplet iteration 97
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 99
+Simplet iteration 98
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1
+
+iteration 100
+Simplet iteration 99
+Basis:
+  []
+Basic point:
+  x0: 1.0
+  x1: 1.0
+Reduced costs:
+  y0: null
+  y1: Neg -inf
+  y2: Neg -inf
+
+
+pivoting on 1

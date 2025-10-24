@@ -48,6 +48,7 @@ def run_main(input_filename: str,
         raise RuntimeError(f"parse error: {e}") from e
 
     print("input file parsed")
+    print(f"Semiring: {numeric_name}")
     print(f"Objective: {'maximize' if is_maximize else 'minimize'}")
 
   
@@ -173,17 +174,19 @@ if __name__ == "__main__":
         
         try:
             solution, point = run_main(input_file, verbose)
-            print(f"\nRisultato: {solution.value}")
+
+            print("\n--- Final Result ---")
+            print(f"\nResult: {solution.value}")
             if solution == Solution.OPTIMUM:
-                print("Punto ottimo:")
+                print("Optimal point:")
                 for i, val in enumerate(point):
                     print(f"  x{i}: {val}")
             elif solution == Solution.INFEASIBLE:
-                print("Il problema è infattibile")
+                print("The problem is infeasible")
             elif solution == Solution.UNBOUNDED:
-                print("Il problema è illimitato")
+                print("The problem is unbounded")
                 
         except Exception as e:
-            print(f"Errore durante la risoluzione: {e}")
+            print(f"Error during solving: {e}")
             import traceback
             traceback.print_exc()

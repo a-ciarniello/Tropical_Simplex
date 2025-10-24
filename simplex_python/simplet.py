@@ -214,35 +214,124 @@ class Simplet:
         
         # Compute mu = max(0, c_1+x_1, ..., c_n+x_n) from the objective function
         mu = self._compute_objective_value(simplet_inst)
-        # In the tropical semiring, negation doesn't exist. Use mu directly.
-        try:
-            neg_mu = self.G.neg(mu)
-        except NotImplementedError:
-            # In the tropical case, use an alternative strategy
-            neg_mu = self.G.zero()  # or -mu if the group supports subtraction
+        neg_mu = self.G.neg(mu)
         
         # Initialize distances from objective to variable nodes
         self._initialize_dual_slacks_from_objective(simplet_inst, neg_mu)
         
-        # Simplified Dijkstra algorithm for longest paths
-        # Initial estimate based on slacks
-        for i in range(nb_ineq):
-            if simplet_inst.arg_slacks[i]:
-                # If the inequality has defined argmin, estimate the reduced cost
-                # based on the first argmin
-                var_index, entry = simplet_inst.arg_slacks[i][0]
-                slack_value = simplet_inst.lp.compute_entry_plus_var(entry, var_index, simplet_inst.point)
+        # Dijkstra's algorithm for longest paths
+        # Consider only VarNodes; when considering a VarNode j:
+        # -mark VarNode j as seen (in the tree of longest paths)
+        # -go to IneqNode sigma(j) with arc cost mu
+        # -explore unseen neighbor VarNodes of IneqNode sigma(j)
+        
+        finished = False
+        while not finished:
+            # Find the VarNode with the longest distance not yet in the tree
+            max_j = None
+            max_val = None
+            
+            for current_j in range(dim):
+                if simplet_inst.var_seen[current_j]:
+                    continue
                 
-                # Simplified estimate of reduced cost
-                if self.G.compare(slack_value, mu) <= 0:
-                    simplet_inst.reduced_costs[i] = (linear_prog.Sign.POS.value, self.G.zero())
+                current_val = simplet_inst.dual_slacks[current_j]
+                if current_val is None:
+                    continue
+                    
+                if max_val is None:
+                    max_j = current_j
+                    max_val = current_val
                 else:
-                    # Potentially negative (favorable for pivoting)
-                    diff = self.G.substract(mu, slack_value)
-                    simplet_inst.reduced_costs[i] = (linear_prog.Sign.NEG.value, diff)
+                    current_sign, current_entry = current_val
+                    max_sign, max_entry = max_val
+                    cmp = self.G.compare(current_entry, max_entry)
+                    if cmp == 1:  # current > max
+                        max_j = current_j
+                        max_val = current_val
+            
+            if max_j is None:
+                finished = True
             else:
-                # No argmin defined, neutral cost
-                simplet_inst.reduced_costs[i] = (linear_prog.Sign.POS.value, self.G.zero())
+                # Mark variable as seen
+                simplet_inst.var_seen[max_j] = True
+                
+                # Get sigma(j) - the inequality corresponding to this variable
+                sigma_j_data = simplet_inst.max_permutation[max_j]
+                if sigma_j_data is None:
+                    continue
+                    
+                sigma_j, sign, entry = sigma_j_data
+                
+                # Get the dual slack (distance) at this variable
+                dual_slack_j = simplet_inst.dual_slacks[max_j]
+                if dual_slack_j is None:
+                    continue
+                j_sign, j_entry = dual_slack_j
+                
+                # Get slack of inequality sigma_j
+                arg_slack_sigma_j = simplet_inst.arg_slacks[sigma_j]
+                if not arg_slack_sigma_j:
+                    continue
+                    
+                var_slack, entry_slack = arg_slack_sigma_j[0]
+                slack_sigma_j = simplet_inst.lp.compute_entry_plus_var(entry_slack, var_slack, simplet_inst.point)
+                
+                # Compute reduced cost for inequality sigma_j
+                entry_sigma_j = self.G.add(j_entry, mu)
+                sign_sigma_j = linear_prog.Sign.POS.value if j_sign == sign else linear_prog.Sign.NEG.value
+                simplet_inst.reduced_costs[sigma_j] = (sign_sigma_j, entry_sigma_j)
+                
+                # Visit neighbors of inequality sigma_j
+                ineq_row = simplet_inst.lp.get_row((linear_prog.RowKind.INEQ, sigma_j))
+                for arc_index, arc_sign, arc_entry in ineq_row:
+                    if arc_index[0] != linear_prog.ColKind.VAR:
+                        continue
+                    
+                    arc_var_index = arc_index[1]
+                    if arc_var_index is None or simplet_inst.var_seen[arc_var_index]:
+                        continue
+                    
+                    # Compute new distance
+                    x_l = simplet_inst.point[arc_var_index]
+                    neg_slack_sigma_j = self.G.neg(slack_sigma_j)
+                    
+                    # new_dist = -mu + x_l + arc_entry - slack_sigma_j + entry_sigma_j
+                    terms = [neg_mu, x_l, arc_entry, neg_slack_sigma_j, entry_sigma_j]
+                    new_dist = self.G.sum(terms)
+                    
+                    # Determine sign of the new path
+                    new_sign = linear_prog.Sign.POS.value if sign_sigma_j == arc_sign.value else linear_prog.Sign.NEG.value
+                    
+                    # Check if this is a better path
+                    current_dual_slack = simplet_inst.dual_slacks[arc_var_index]
+                    better = False
+                    if current_dual_slack is None:
+                        better = True
+                    else:
+                        current_sign, current_entry = current_dual_slack
+                        cmp = self.G.compare(current_entry, new_dist)
+                        if cmp == -1:  # current < new_dist
+                            better = True
+                    
+                    if better:
+                        simplet_inst.dual_slacks[arc_var_index] = (new_sign, new_dist)
+        
+        # Rescale reduced costs
+        for i in range(nb_ineq):
+            arg_slack_i = simplet_inst.arg_slacks[i]
+            if not arg_slack_i:
+                continue
+                
+            var_slack, entry_slack = arg_slack_i[0]
+            slack_i = simplet_inst.lp.compute_entry_plus_var(entry_slack, var_slack, simplet_inst.point)
+            
+            z_i = simplet_inst.reduced_costs[i]
+            if z_i is not None:
+                sign, value = z_i
+                neg_slack_i = self.G.neg(slack_i)
+                rescaled_red_cost = self.G.add(value, neg_slack_i)
+                simplet_inst.reduced_costs[i] = (sign, rescaled_red_cost)
     
     def _compute_objective_value(self, simplet_inst: "Simplet.SimpletInstance") -> Any:
         """

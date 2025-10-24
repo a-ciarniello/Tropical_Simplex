@@ -90,6 +90,7 @@ class GroupFromNumeric(OrderedGroup):
 # Int group
 # ==========================================================
 class IntGroup(OrderedGroup):
+    """Integer group for classical algebra (mul = *)"""
     def zero(self):
         return 0
 
@@ -110,6 +111,20 @@ class IntGroup(OrderedGroup):
 
     def to_string(self, x):
         return str(x)
+
+
+# ==========================================================
+# Tropical Int group (for use in tropical context)
+# ==========================================================
+class TropicalIntGroup(IntGroup):
+    """Integer group for tropical algebra context (mul = +)
+    
+    Used as components F and H in the perturbed group (F, G, H)
+    where tropical multiplication is standard addition.
+    """
+    def mul(self, x, y):
+        # Tropical multiplication
+        return x + y
 
 
 # ==========================================================

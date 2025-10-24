@@ -29,9 +29,9 @@ class PerturbedLP:
         # Original group G
         self.G = lp_module.G
         
-        # Perturbation groups F and H
-        self.F = group.IntGroup()
-        self.H = group.CartesianPowerSparse(group.IntGroup())
+        # Perturbation groups F and H (use TropicalIntGroup for tropical context)
+        self.F = group.TropicalIntGroup()
+        self.H = group.CartesianPowerSparse(group.TropicalIntGroup())
         
         # We model the cartesian triple (F, G, H) using nested tuples: (f, (g, h))
         # This allows us to reuse the CartesianProduct group structure.
@@ -120,9 +120,13 @@ class PerturbedLP:
         matrix = lower_bounds_rows + processed_rows
         matrix.insert(0, infeasibility_var_lb_row)
         matrix.insert(0, inf_plane_row)
-        
+        matrix.reverse()
+
         nb_columns = dim + 2  # Original vars + infeasibility var + affine
-        perturbed_matrix = self._epsilon_perturbation(matrix, 1, nb_columns)
+        perturbed_m = self._epsilon_perturbation(matrix, 1, nb_columns)
+
+        perturbed_m.reverse()
+        perturbed_matrix = perturbed_m
 
         # --- 5. Assemble and perturb the objective function ---
         objective_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.POS, self.PertG.zero() )]
