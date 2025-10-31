@@ -381,15 +381,17 @@ class Simplet:
                 if node_type == "IneqNode":
                     ineq_index = int(node_value) if isinstance(node_value, int) else None
                     if ineq_index is not None:
-                        # Find the unique variable neighbor in the tangent digraph
+                        # Get all variables connected to this inequality node
                         if simplet_inst.tangent_digraph is not None:
                             ineq_node = simplet_inst.tangent_digraph.get_ineq_node(ineq_index)
+                            # In a hyperplan node, there should be at least one VAR with each sign
+                            # We assign this inequality to ALL connected non-affine variables
+                            # that don't have a permutation yet
                             for var_index, sign, entry in ineq_node:
                                 if var_index[0] == linear_prog.ColKind.VAR:
                                     j = var_index[1]
                                     if j is not None and simplet_inst.max_permutation[j] is None:
                                         simplet_inst.max_permutation[j] = (ineq_index, sign.value, entry)
-                                        break
                 return acc
             
             # Start DFS from the affine node

@@ -75,6 +75,7 @@ def run_main(input_filename: str,
 
         basic_point_given = basic_point_list.size > 0 if hasattr(basic_point_list, 'size') else len(basic_point_list) > 0
 
+
         if basic_point_given:
             # ----- Caso: base fornita -> Fase II diretta -----
             basic_point = np.array(basic_point_list)
@@ -99,7 +100,11 @@ def run_main(input_filename: str,
 
             if log:
                 print("\n------------------\nphaseI lp:\n", file=log)
+
+            print("\n------------------\n \nphaseI lp constructed:")
             phaseI_lp.pretty_print()
+
+            print("\n------------------\nInitial basic point for phaseI: \n", basic_point)
 
             SimpletI = Simplet(LPmod._impl) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)

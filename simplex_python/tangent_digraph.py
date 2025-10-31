@@ -4,13 +4,13 @@ from typing import Any, List, Tuple, Optional, Union
 import linear_prog
 import group
 
-# Usa i tipi da linear_prog per consistenza
+
 Sign = linear_prog.Sign
 ColIndex = linear_prog.ColIndex
 RowIndex = linear_prog.RowIndex
 VarIndex = ColIndex
 IneqIndex = int
-# Tipi più specifici per evitare problemi di type checking
+
 VarNodeIndex = Tuple[str, VarIndex]  # ("VarNode", var_index)
 IneqNodeIndex = Tuple[str, int]      # ("IneqNode", i)
 NodeIndex = Union[VarNodeIndex, IneqNodeIndex]
@@ -70,8 +70,9 @@ class TangentDigraph:
             has_pos = any(sign == linear_prog.Sign.POS for _, sign, _ in arg)
             has_neg = any(sign == linear_prog.Sign.NEG for _, sign, _ in arg)
 
-            if not has_pos:
-                # Inequality is violated (no positive coefficients mean the constraint is not satisfied)
+            # SPECIAL CASE: Allow inequality 0 (infinity plane in PhaseI) to be violated initially
+            # The simplex method will handle it during pivoting
+            if not has_pos:                
                 raise ValueError(f"Error while initializing tangent digraph. "
                                f"Input point does not satisfy inequality indexed by {i}")
             

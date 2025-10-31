@@ -11,6 +11,11 @@ class AdditiveGroup:
     """Additive (commutative) group."""
 
     def zero(self) -> Any:
+        """Additive identity (0 in standard algebra, ±inf in tropical)."""
+        raise NotImplementedError
+    
+    def one(self) -> Any:
+        """Multiplicative identity (1 in standard algebra, 0 in tropical)."""
         raise NotImplementedError
 
     def add(self, x, y):
@@ -66,6 +71,9 @@ class GroupFromNumeric(OrderedGroup):
 
     def zero(self):
         return self.Numeric.zero
+    
+    def one(self):
+        return self.Numeric.one
 
     def add(self, x, y):
         return self.Numeric.add(x, y)
@@ -93,6 +101,9 @@ class IntGroup(OrderedGroup):
     """Integer group for classical algebra (mul = *)"""
     def zero(self):
         return 0
+    
+    def one(self):
+        return 1
 
     def add(self, x, y):
         return x + y
@@ -116,15 +127,56 @@ class IntGroup(OrderedGroup):
 # ==========================================================
 # Tropical Int group (for use in tropical context)
 # ==========================================================
-class TropicalIntGroup(IntGroup):
-    """Integer group for tropical algebra context (mul = +)
+class TropicalIntGroup(OrderedGroup):
+    """Integer group for tropical min-plus algebra.
     
-    Used as components F and H in the perturbed group (F, G, H)
-    where tropical multiplication is standard addition.
+    In tropical min-plus:
+    - Addition (⊕) = min
+    - Multiplication (⊗) = standard addition
+    - Zero (additive identity) = +∞
+    - One (multiplicative identity) = 0
+    
+    Used as components F and H in the perturbed group (F, G, H).
     """
+    def zero(self):
+        """Additive identity in tropical min-plus = +∞"""
+        return float('inf')
+    
+    def one(self):
+        """Multiplicative identity in tropical min-plus = 0"""
+        return 0
+    
+    def add(self, x, y):
+        """Tropical addition = min"""
+        return min(x, y)
+    
+    def neg(self, x):
+        """Additive inverse: -x in tropical context"""
+        return -x
+    
     def mul(self, x, y):
-        # Tropical multiplication
+        """Tropical multiplication = standard addition"""
         return x + y
+    
+    def compare(self, x, y):
+        """Standard comparison"""
+        if x < y:
+            return -1
+        elif x > y:
+            return 1
+        else:
+            return 0
+    
+    def max(self, x, y):
+        """Maximum value"""
+        return max(x, y)
+    
+    def to_string(self, x):
+        if x == float('inf'):
+            return "+inf"
+        elif x == float('-inf'):
+            return "-inf"
+        return str(int(x)) if x == int(x) else str(x)
 
 
 # ==========================================================
@@ -138,6 +190,9 @@ class ReverseOrder(OrderedGroup):
 
     def zero(self):
         return self.G.zero()
+    
+    def one(self):
+        return self.G.one()
 
     def add(self, x, y):
         return self.G.add(x, y)
@@ -168,6 +223,9 @@ class CartesianProduct(OrderedGroup):
 
     def zero(self):
         return (self.G.zero(), self.H.zero())
+    
+    def one(self):
+        return (self.G.one(), self.H.one())
 
     def add(self, a, b):
         g1, h1 = a
@@ -209,6 +267,76 @@ class CartesianProduct(OrderedGroup):
 
 
 # ==========================================================
+# Cartesian Triple (F, G, H) - flat triple structure
+# ==========================================================
+@dataclass
+class CartesianTriple(OrderedGroup):
+    """
+    Cartesian product of three ordered groups F, G, H.
+    Elements are flat tuples (f, g, h).
+    This matches OCaml's MakeCartesianTriple implementation.
+    """
+    F: OrderedGroup
+    G: OrderedGroup
+    H: OrderedGroup
+
+    def zero(self):
+        return (self.F.zero(), self.G.zero(), self.H.zero())
+    
+    def one(self):
+        return (self.F.one(), self.G.one(), self.H.one())
+
+    def add(self, a, b):
+        f1, g1, h1 = a
+        f2, g2, h2 = b
+        return (self.F.add(f1, f2), self.G.add(g1, g2), self.H.add(h1, h2))
+
+    def neg(self, a):
+        f, g, h = a
+        return (self.F.neg(f), self.G.neg(g), self.H.neg(h))
+
+    def mul(self, a, b):
+        f1, g1, h1 = a
+        f2, g2, h2 = b
+        return (self.F.mul(f1, f2), self.G.mul(g1, g2), self.H.mul(h1, h2))
+
+    def compare(self, a, b):
+        """Lexicographic comparison: F first, then G, then H."""
+        f1, g1, h1 = a
+        f2, g2, h2 = b
+        c = self.F.compare(f1, f2)
+        if c != 0:
+            return c
+        c = self.G.compare(g1, g2)
+        if c != 0:
+            return c
+        return self.H.compare(h1, h2)
+
+    def max(self, a, b):
+        return a if self.compare(a, b) >= 0 else b
+
+    def from_entries(self, f, g, h):
+        """Create a triple from three components."""
+        return (f, g, h)
+
+    def first(self, a):
+        """Extract F component."""
+        return a[0]
+
+    def second(self, a):
+        """Extract G component."""
+        return a[1]
+
+    def third(self, a):
+        """Extract H component."""
+        return a[2]
+
+    def to_string(self, a):
+        f, g, h = a
+        return f"[|{self.F.to_string(f)}; {self.G.to_string(g)}; {self.H.to_string(h)}|]"
+
+
+# ==========================================================
 # Cartesian Power (sparse)
 # ==========================================================
 @dataclass
@@ -217,6 +345,10 @@ class CartesianPowerSparse(OrderedGroup):
     G: OrderedGroup
 
     def zero(self):
+        return []
+    
+    def one(self):
+        """Multiplicative identity: sparse vector with no entries (implicitly all ones)."""
         return []
 
     def add(self, x: List[Tuple[int, Any]], y: List[Tuple[int, Any]]):

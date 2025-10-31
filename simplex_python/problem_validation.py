@@ -27,11 +27,12 @@ def test_parser_with_lp_file(filename="problems/example_2.lp"):
     print("2. Complete parsing test...")
     Num = numeric.get(numeric_name)
     Parse = parser.Parser(Num)
-    
-    objective, ineqs, basic_point = Parse.main(content)
+
+    objective, ineqs, basic_point, is_maximize = Parse.main(content)
     print(f"   objective: {objective}")
     print(f"   \n ineqs: {ineqs}")
     print(f"   \n basic_point: {basic_point}")
+    print(f"   \n is_maximize: {is_maximize}")
     print()
 
     # Test 3: LP creation test
