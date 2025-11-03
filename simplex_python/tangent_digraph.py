@@ -54,6 +54,7 @@ class TangentDigraph:
         """Crea il grafo tangente del LP al punto dato."""
         dim = lp.dim()
         nb_ineq = lp.nb_ineq()
+
         if len(point) != dim:
             raise ValueError(
                 f"dimension mismatch: LP has {dim} vars, point has {len(point)}"
@@ -65,6 +66,8 @@ class TangentDigraph:
 
         for i in range(nb_ineq):
             arg = lp.compute_slack_args((linear_prog.RowKind.INEQ, i), point)
+
+            print(linear_prog.RowKind.INEQ, i, "args:", arg)
 
             # Check if the inequality is saturated (has both + and -)
             has_pos = any(sign == linear_prog.Sign.POS for _, sign, _ in arg)

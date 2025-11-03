@@ -1,0 +1,43 @@
+
+ parsed lp
+
+dim = 2
+nb ineq = 3
+minimize max( x, -4.+y )
+subject to:
+3. >= max( x, y )
+x >= 1.
+y >= 1.
+
+------------------
+applying tropical simplex method with given input basic point
+
+
+iteration 1
+basis:
+0, 2, 
+point:
+x: 3.
+y: 1.
+reduced costs:
+y0: Neg 0.
+y1: null
+y2: Neg 0.
+
+pivoting on 0
+
+iteration 2
+basis:
+1, 2, 
+point:
+x: 1.
+y: 1.
+reduced costs:
+y0: null
+y1: Pos 0.
+y2: Pos -4.
+ ===
+ Optimal basic point found
+ ===
+x: 1.
+y: 1.
