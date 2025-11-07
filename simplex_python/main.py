@@ -98,15 +98,15 @@ def run_main(input_filename: str,
             PertLP = PerturbedLP(LPmod._impl)
             phaseI_lp, basic_point = PertLP.phaseI(lp)
 
+            print("\n------------------\nInitial basic point for phaseI: \n", basic_point)
+        
             if log:
                 print("\n------------------\nphaseI lp:\n", file=log)
 
             print("\n------------------\n \nphaseI lp constructed:")
             phaseI_lp.pretty_print()
 
-            print("\n------------------\nInitial basic point for phaseI: \n", basic_point)
-
-            SimpletI = Simplet(LPmod._impl) 
+            SimpletI = Simplet(PertLP.LP_pert_mod) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
             print("solving phaseI")

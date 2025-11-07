@@ -97,22 +97,24 @@ class PerturbedLP:
         Returns:
             A tuple containing the Phase I LP and an initial basic point for it.
         """
+
+
         # --- 1. Define constant perturbed values ---
-        # Use standard zero (0.0) for coordinate values, not tropical zero (±inf)
         phaseI_lower_bound = self._from_entries(-3, self.CoordNumeric.zero, self.H.zero())
         upper_bound = self._from_entries(1, self.CoordNumeric.zero, self.H.zero())
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
         infeasibility_var_idx = dim
 
+
         # --- 2. Process input inequalities ---
-        # Corresponds to `new_rows_builder` and `add_infeasibility_var`
         processed_rows = self._process_input_rows(lp)
-        # Use multiplicative identity coefficient for variable
+
         identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
         for row in processed_rows:
-            # Add the new infeasibility variable to each original inequality
+            
             new_coeff = ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
             row.insert(0, new_coeff)
+
 
         # --- 3. Build other rows ---
         lower_bounds_rows = self._lower_bounds_builder(lp)
@@ -123,29 +125,29 @@ class PerturbedLP:
         ]
         
         phaseII_inf_plane = self._infinity_plane_row(dim, upper_bound)
-        # Add infeasibility var with NEGATIVE sign to the infinity plane (OCaml uses Neg)
         inf_plane_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.NEG, identity_coeff )] + phaseII_inf_plane
-        
+
+
         # --- 4. Assemble and perturb the matrix ---
-        # IMPORTANT: OCaml order is processed_rows + lower_bounds_rows (not lower_bounds first!)
-        # See perturbedLP.ml line 231: lower_bounds_builder appends to processed_rows
-        matrix = processed_rows + lower_bounds_rows
+        matrix = lower_bounds_rows + processed_rows
         matrix.insert(0, infeasibility_var_lb_row)
         matrix.insert(0, inf_plane_row)
 
         matrix.reverse()
 
-        nb_columns = dim + 2  # Original vars + infeasibility var + affine
+        nb_columns = dim + 2
         perturbed_m = self._epsilon_perturbation(matrix, 1, nb_columns)
 
         perturbed_m.reverse()
         perturbed_matrix = perturbed_m
 
+
         # --- 5. Assemble and perturb the objective function ---
         identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
-        objective_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )]
+        objective_row = [((ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff)]
         perturbed_objective = self._epsilon_perturb_row(objective_row, 0, nb_columns)
         
+
         # --- 6. Create the Phase I LP ---
         phaseI_lp = self.LP_pert_mod.init(
             var_names=lambda j: f"phaseI_var_{j}",
@@ -154,12 +156,10 @@ class PerturbedLP:
             ineqs=perturbed_matrix
         )
 
+
         # --- 7. Compute the initial basic point ---
         initial_basic_point = np.empty(dim + 1, dtype=object)
-        
-        # For original variables
-        # OCaml uses i = 1 + nb_ineq + j (see perturbedLP.ml line 252)
-        # This is NOT the perturbation index of the inequality, but a separate index for point calculation
+
         
         for j in range(dim):
             # Use OCaml formula directly
@@ -172,13 +172,11 @@ class PerturbedLP:
                 self.H.neg(self._epsilon_perturbation_coeff(i, j, nb_columns)),
                 self.H.neg(self._epsilon_perturbation_coeff(i, nb_columns - 1, nb_columns))
             )
-            # Use standard zero for coordinate perturbations
+
             pertl = self.PertG.add(l, self._from_entries(0, self.CoordNumeric.zero, h_pert))
             initial_basic_point[j] = pertl
             
-        # For the infeasibility variable
         j = dim
-        # OCaml uses i = 1 + nb_ineq + dim + 1 (see perturbedLP.ml line 267)
         i = 1 + nb_ineq + dim + 1
 
         print(f"Infeasibility variable (j={j}): using i={i} (OCaml formula: 1 + nb_ineq + dim + 1)")
@@ -188,7 +186,7 @@ class PerturbedLP:
             self._epsilon_perturbation_coeff(i, j, nb_columns),
             self._epsilon_perturbation_coeff(i, nb_columns - 1, nb_columns)
         )
-        # Use standard zero for coordinate perturbations
+
         pertl = self.PertG.add(l, self._from_entries(0, self.CoordNumeric.zero, h_pert))
         initial_basic_point[j] = pertl
         
@@ -200,29 +198,32 @@ class PerturbedLP:
         Constructs the perturbed Phase II LP from the original LP.
         """
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
-        # Use standard zero for coordinate values
         upper_bound = self._from_entries(1, self.CoordNumeric.zero, self.H.zero())
         
+
         # --- 1. Process input rows and add lower bounds ---
         processed_input_rows = self._process_input_rows(lp)
         matrix = self._lower_bounds_builder(lp) + processed_input_rows
         
+
         # --- 2. Perturb the main matrix ---
         nb_columns = dim + 1 # Original vars + affine
         perturbed_matrix = self._epsilon_perturbation(matrix, 1, nb_columns)
         
+
         # --- 3. Create and perturb the infinity plane row separately ---
         infinity_plane = self._infinity_plane_row(dim, upper_bound)
-        # The row index for perturbation must be unique
         pert_inf_plane = self._epsilon_perturbation([infinity_plane], dim + nb_ineq + 2, nb_columns)
         
         final_matrix = perturbed_matrix + pert_inf_plane
+
 
         # --- 4. Process and perturb the objective function ---
         obj_row_g = lp.get_row((RowKind.OBJECTIVE, None))
         objective_row = self._g_row_to_fgh_row(obj_row_g)
         perturbed_objective = self._epsilon_perturb_row(objective_row, 0, nb_columns)
         
+
         # --- 5. Create the Phase II LP ---
         phaseII_lp = self.LP_pert_mod.init(
             var_names=lp.var_names,
@@ -232,8 +233,9 @@ class PerturbedLP:
         )
         
         return phaseII_lp
+    
 
-    # === Internal Helper Methods ===
+    # === Helper Methods ===
     
     def _affine_perturbation(self, row_index: int, lp: LP) -> Any:
         """Perturbation for rows without an affine term.

@@ -89,9 +89,8 @@ class LP:
         row = self.get_row(row_index)
         result: List[Tuple[ColIndex, Sign, Any]] = []
         
-
-
         i = 0
+
         for col_index, sign, entry in row:
             i += 1
             slack = self.compute_entry_plus_var(entry, col_index, point)
@@ -106,6 +105,7 @@ class LP:
 
                 old_slack = self.compute_entry_plus_var(old_entry, old_col_index, point)
                 cmp_val = self.G.compare(slack, old_slack)
+                print("Compare:", cmp_val)
                 if cmp_val == 0:
                     result.append((col_index, sign, entry))
                 elif cmp_val == -1:  # slack < old_slack → new minimum found
@@ -113,7 +113,6 @@ class LP:
 
 
             print(f"Result n° {i} slack args:", result)
-
         return result
 
     def is_point_feasible(self, point: np.ndarray) -> bool:
