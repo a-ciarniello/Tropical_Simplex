@@ -1,4 +1,4 @@
-numeric:float
+numeric: int
 vars: x,y
 
 lp:

@@ -6,3 +6,4 @@ log
 *.pt
 /model_weights/**
 *.xlsx
+.idea/**

@@ -136,7 +136,8 @@ class LP:
             if neg and not pos:
                 return False
         return True
-
+    
+    
     def pretty_print(self):
         print(f"dim = {self.dim()}, nb_ineq = {self.nb_ineq()}")
         print("Objective:")

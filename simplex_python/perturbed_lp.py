@@ -63,6 +63,32 @@ class PerturbedLP:
         """Extracts the H component from a perturbed element."""
         return self.PertG.third(fgh)
 
+    # === Debugging / Formatting Methods ===
+    def _format_row(self, row: List[Tuple[ColIndex, Sign, Any]]) -> str:
+        """Return a readable string representation for a perturbed row."""
+        entries = []
+        for col_index, sign, fgh in row:
+            fgh_str = self.PertG.to_string(fgh)
+            if sign == Sign.POS:
+                sign_str = "POS"
+            else:
+                sign_str = "NEG"
+
+            if col_index[0] == ColKind.VAR:
+                col_str = f"VAR {col_index[1]}"
+            else:
+                col_str = f"AFFINE"
+            entries.append(f"{sign_str}, {col_str}: {fgh_str}")
+        return "; ".join(entries)
+
+    def _format_matrix(self, matrix: List[List[Tuple[ColIndex, Sign, Any]]]) -> str:
+        """Return a multi-line string showing one row per line."""
+        lines = []
+        for idx, row in enumerate(matrix):
+            lines.append(f"Row {idx}: {self._format_row(row)}")
+        return "\n".join(lines)
+    # === END Debugging / Formatting Methods ===
+
     # === Core Public Methods ===
 
     def project(self, fgh: Any) -> Optional[Any]:
@@ -113,7 +139,7 @@ class PerturbedLP:
         for row in processed_rows:
             
             new_coeff = ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
-            row.insert(0, new_coeff)
+            row.append(new_coeff)
 
 
         # --- 3. Build other rows ---
@@ -124,21 +150,31 @@ class PerturbedLP:
             ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
         ]
         
+        print(f"\n Lower bound: \n{self._format_matrix(lower_bounds_rows)} \n\n")
+
         phaseII_inf_plane = self._infinity_plane_row(dim, upper_bound)
         inf_plane_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.NEG, identity_coeff )] + phaseII_inf_plane
 
 
         # --- 4. Assemble and perturb the matrix ---
         matrix = lower_bounds_rows + processed_rows
+
+        print(f"\n Matrix before adding special rows:\n{self._format_matrix(matrix)}\n")
+
         matrix.insert(0, infeasibility_var_lb_row)
         matrix.insert(0, inf_plane_row)
 
-        matrix.reverse()
+        print(f"\n Matrix before perturbation: \n{self._format_matrix(matrix)}\n")
 
         nb_columns = dim + 2
+        matrix.reverse()
+
         perturbed_m = self._epsilon_perturbation(matrix, 1, nb_columns)
 
         perturbed_m.reverse()
+
+        print(f"Perturbed matrix created: \n{self._format_matrix(perturbed_m)}\n")
+
         perturbed_matrix = perturbed_m
 
 
@@ -162,7 +198,7 @@ class PerturbedLP:
 
         
         for j in range(dim):
-            # Use OCaml formula directly
+
             i = 1 + nb_ineq + j
             l = self._lower_bound(j, lp)
             
@@ -275,8 +311,12 @@ class PerturbedLP:
         """Applies epsilon perturbation to a list of rows."""
         new_rows = []
         for i, row in enumerate(rows):
+
+            print(f"Applying perturbation to row {i + first_row_index}")
+
             row_index = i + first_row_index
             new_row = self._epsilon_perturb_row(row, row_index, nb_columns)
+           
             new_rows.append(new_row)
         return new_rows
 
@@ -293,8 +333,7 @@ class PerturbedLP:
         new_rows = []
         for i in range(lp.nb_ineq()):
             old_row = lp.get_row((RowKind.INEQ, i))
-            processed_row = self._g_row_to_fgh_row(old_row)
-            
+            processed_row = self._g_row_to_fgh_row(old_row)            
             # If the original row has no affine term, add a perturbed one.
             has_affine = any(c[0] == ColKind.AFFINE for c in old_row)
             if not has_affine:
@@ -323,5 +362,5 @@ class PerturbedLP:
                 ( (ColKind.AFFINE, None), Sign.NEG, fgh ),
                 ( (ColKind.VAR, j), Sign.POS, identity_coeff )
             ]
-            rows.append(row)
+            rows.insert(0, row)
         return rows

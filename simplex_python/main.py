@@ -48,6 +48,7 @@ def run_main(input_filename: str,
         raise RuntimeError(f"parse error: {e}") from e
 
     print("input file parsed")
+    print(f"Variables: {var_names}")
     print(f"Semiring: {numeric_name}")
     print(f"Objective: {'maximize' if is_maximize else 'minimize'}")
 
