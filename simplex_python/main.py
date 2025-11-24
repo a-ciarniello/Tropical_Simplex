@@ -48,9 +48,9 @@ def run_main(input_filename: str,
         raise RuntimeError(f"parse error: {e}") from e
 
     print("input file parsed")
-    print(f"Variables: {var_names}")
-    print(f"Semiring: {numeric_name}")
-    print(f"Objective: {'maximize' if is_maximize else 'minimize'}")
+    print(f"\nVariables: {var_names}")
+    print(f"\nSemiring: {numeric_name}")
+    print(f"\nObjective: {'maximize' if is_maximize else 'minimize'}\n")
 
   
     G = group.GroupFromNumeric(Num)
@@ -107,6 +107,8 @@ def run_main(input_filename: str,
             print("\n------------------\n \nphaseI lp constructed:")
             phaseI_lp.pretty_print()
 
+            MAX_ITERS_PHASE_I = 5
+
             SimpletI = Simplet(PertLP.LP_pert_mod) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
@@ -114,7 +116,7 @@ def run_main(input_filename: str,
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
             # Phase I is always a minimization problem (finding feasibility)
             pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
-            SimpletI.solve(phaseI, pivot_rule_phaseI, log)
+            SimpletI.solve(phaseI, pivot_rule_phaseI, log, max_iterations=MAX_ITERS_PHASE_I)
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
@@ -129,6 +131,8 @@ def run_main(input_filename: str,
                 print("\n---------\nphaseII lp:\n", file=log)
             phaseII_lp.pretty_print()
 
+            MAX_ITERS_PHASE_II = 100
+
             phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
             SimpletII = Simplet(LPmod._impl)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
@@ -136,7 +140,8 @@ def run_main(input_filename: str,
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
             # Phase II uses the original objective direction
             pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
-            SimpletII.solve(phaseII, pivot_rule_phaseII, log)
+            SimpletII.solve(phaseII, pivot_rule_phaseII, log, max_iterations=MAX_ITERS_PHASE_II)
+
 
             ub_row = PertLP.phaseII_upperbound_row(lp)
             basis_has_inf_plane = SimpletII.basis_contains(phaseII, ub_row)

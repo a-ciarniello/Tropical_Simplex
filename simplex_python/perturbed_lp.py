@@ -149,8 +149,6 @@ class PerturbedLP:
             ( (ColKind.AFFINE, None), Sign.NEG, phaseI_lower_bound ),
             ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
         ]
-        
-        print(f"\n Lower bound: \n{self._format_matrix(lower_bounds_rows)} \n\n")
 
         phaseII_inf_plane = self._infinity_plane_row(dim, upper_bound)
         inf_plane_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.NEG, identity_coeff )] + phaseII_inf_plane
@@ -158,8 +156,6 @@ class PerturbedLP:
 
         # --- 4. Assemble and perturb the matrix ---
         matrix = lower_bounds_rows + processed_rows
-
-        print(f"\n Matrix before adding special rows:\n{self._format_matrix(matrix)}\n")
 
         matrix.insert(0, infeasibility_var_lb_row)
         matrix.insert(0, inf_plane_row)
@@ -173,7 +169,7 @@ class PerturbedLP:
 
         perturbed_m.reverse()
 
-        print(f"Perturbed matrix created: \n{self._format_matrix(perturbed_m)}\n")
+        print(f"\n Perturbed matrix created: \n{self._format_matrix(perturbed_m)}\n")
 
         perturbed_matrix = perturbed_m
 
@@ -201,8 +197,7 @@ class PerturbedLP:
 
             i = 1 + nb_ineq + j
             l = self._lower_bound(j, lp)
-            
-            print(f"  Variable {j}: using i={i}")
+        
 
             h_pert = self.H.add(
                 self.H.neg(self._epsilon_perturbation_coeff(i, j, nb_columns)),
@@ -214,9 +209,6 @@ class PerturbedLP:
             
         j = dim
         i = 1 + nb_ineq + dim + 1
-
-        print(f"Infeasibility variable (j={j}): using i={i} (OCaml formula: 1 + nb_ineq + dim + 1)")
-
         l = upper_bound
         h_pert = self.H.add(
             self._epsilon_perturbation_coeff(i, j, nb_columns),
@@ -304,20 +296,17 @@ class PerturbedLP:
                 h = self.H.neg(h)
             
             pert_fgh = self._from_entries(f, g, h)
-            new_row.append((col_index, sign, pert_fgh))
+            new_row.insert(0, (col_index, sign, pert_fgh))
         return new_row
 
     def _epsilon_perturbation(self, rows: List, first_row_index: int, nb_columns: int) -> List:
         """Applies epsilon perturbation to a list of rows."""
         new_rows = []
         for i, row in enumerate(rows):
-
-            print(f"Applying perturbation to row {i + first_row_index}")
-
             row_index = i + first_row_index
             new_row = self._epsilon_perturb_row(row, row_index, nb_columns)
            
-            new_rows.append(new_row)
+            new_rows.insert(0, new_row)
         return new_rows
 
     def _g_row_to_fgh_row(self, old_row: List) -> List:

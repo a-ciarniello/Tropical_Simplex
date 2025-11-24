@@ -108,11 +108,11 @@ class LP:
                 print("Compare:", cmp_val)
                 if cmp_val == 0:
                     result.append((col_index, sign, entry))
-                elif cmp_val == -1:  # slack < old_slack → new minimum found
+                elif cmp_val == 1:  # slack < old_slack → new minimum found
                     result = [(col_index, sign, entry)]
 
+            print(f"\nResult n° {i} slack args:", result)
 
-            print(f"Result n° {i} slack args:", result)
         return result
 
     def is_point_feasible(self, point: np.ndarray) -> bool:
