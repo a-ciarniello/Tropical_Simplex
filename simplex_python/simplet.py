@@ -735,13 +735,11 @@ class Simplet:
         
         return current_point
 
-
     def solve(
         self,
         inst: "Simplet.SimpletInstance",
         pivot_rule: Callable[["Simplet.SimpletInstance"], Optional[int]],
         log: Optional[TextIO] = None,
-        max_iterations: Optional[int] = None,
     ) -> None:
         """
         Solve the tropical LP by iterating pivots until optimality is reached.
@@ -751,25 +749,15 @@ class Simplet:
             pivot_rule: Function that selects which inequality should leave the basis.
                         Returns None when optimal.
             log: Optional output stream for logging the solving process.
-            max_iterations: Optional cap on the number of pivot iterations (for debugging).
         """
-        print("\nSTARTING SIMPLEX\n")
-
         nb_iter = 1
         is_optimal = False
         
         def myprintf(outchannel, format_str, *args):
             if outchannel is not None:
                 print(format_str % args, file=outchannel)
-
+        
         while not is_optimal:
-            # --- debug cap per evitare loop infiniti ---
-            if max_iterations is not None and nb_iter > max_iterations:
-                myprintf(log, "\n[DEBUG] Reached max_iterations=%d, stopping simplex.", max_iterations)
-                print(f"[DEBUG] Reached max_iterations={max_iterations}, stopping simplex.")
-                break
-            # --------------------------------------------
-
             myprintf(log, "\niteration %d", nb_iter)
             self.print_status(inst, log)
             
@@ -782,7 +770,6 @@ class Simplet:
                 myprintf(log, "\npivoting on %d", leaving_ineq)
                 self.pivot(inst, leaving_ineq)
                 nb_iter += 1
-
 
     # --- Access methods ---
     def basic_point(self, inst: "Simplet.SimpletInstance") -> np.ndarray:

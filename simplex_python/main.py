@@ -26,7 +26,6 @@ class Solution(Enum):
 
 # ---------- main porting ----------
 def run_main(input_filename: str,
-             verbose: bool = False,
              log_file_name: str = "log") -> Tuple[Solution, np.ndarray]:
 
 
@@ -68,7 +67,7 @@ def run_main(input_filename: str,
     lp: LP = LPmod.init(var_names_fun, nb_var, obj, ineq)
 
 
-    log: Optional[TextIO] = open(log_file_name, "w", encoding="utf-8") if verbose else None
+    log: Optional[TextIO] = open(log_file_name, "w", encoding="utf-8")
     try:
         if log:
             print("\n parsed successfully\n", file=log)
@@ -107,8 +106,6 @@ def run_main(input_filename: str,
             print("\n------------------\n \nphaseI lp constructed:")
             phaseI_lp.pretty_print()
 
-            MAX_ITERS_PHASE_I = 5
-
             SimpletI = Simplet(PertLP.LP_pert_mod) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
@@ -116,7 +113,7 @@ def run_main(input_filename: str,
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
             # Phase I is always a minimization problem (finding feasibility)
             pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
-            SimpletI.solve(phaseI, pivot_rule_phaseI, log, max_iterations=MAX_ITERS_PHASE_I)
+            SimpletI.solve(phaseI, pivot_rule_phaseI, log)
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
@@ -131,8 +128,6 @@ def run_main(input_filename: str,
                 print("\n---------\nphaseII lp:\n", file=log)
             phaseII_lp.pretty_print()
 
-            MAX_ITERS_PHASE_II = 100
-
             phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
             SimpletII = Simplet(LPmod._impl)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
@@ -140,7 +135,7 @@ def run_main(input_filename: str,
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
             # Phase II uses the original objective direction
             pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
-            SimpletII.solve(phaseII, pivot_rule_phaseII, log, max_iterations=MAX_ITERS_PHASE_II)
+            SimpletII.solve(phaseII, pivot_rule_phaseII, log)
 
 
             ub_row = PertLP.phaseII_upperbound_row(lp)
@@ -169,22 +164,39 @@ def run_main(input_filename: str,
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        # Test di base se non vengono forniti argomenti
-        print("Uso: python main.py <file.lp> [--verbose]")
-        print("\nTest di base del gruppo tropicale:")
-        Num = numeric.get("tropical_min_plus")
-        G = group.GroupFromNumeric(Num)
-        print("Zero:", G.zero())
-        print("Trop Add(2,5):", G.add(2, 5))
-        print("Compare(2,5):", G.compare(2, 5))
-        print("Trop Mux(2,5):", G.mul(2, 5))
+
+        ## Execute a predefined test problem
+        print("\nNo input file provided, running predefined test problem 'non_generic.lp'\n")
+
+        input_file = "simplex_python/problems/non_generic.lp"
+        verbose = False
+
+        try:
+            solution, point = run_main(input_file)
+
+            print("\n--- Final Result ---")
+            print(f"\nResult: {solution.value}")
+            if solution == Solution.OPTIMUM:
+                print("Optimal point:")
+                for i, val in enumerate(point):
+                    print(f"  x{i}: {val}")
+            elif solution == Solution.INFEASIBLE:
+                print("The problem is infeasible")
+            elif solution == Solution.UNBOUNDED:
+                print("The problem is unbounded")
+                
+        except Exception as e:
+            print(f"Error during solving: {e}")
+            import traceback
+            traceback.print_exc()
+
+
     else:
         # Risolve il problema LP fornito
         input_file = sys.argv[1]
-        verbose = "--verbose" in sys.argv or "-v" in sys.argv
         
         try:
-            solution, point = run_main(input_file, verbose)
+            solution, point = run_main(input_file)
 
             print("\n--- Final Result ---")
             print(f"\nResult: {solution.value}")
