@@ -83,7 +83,15 @@ class LP:
                 raise ValueError("Entry cannot be None for VAR column")
             # Use multiplication (which is addition in tropical algebra)
             # This computes coefficient + variable_value
-            return self.G.add(entry, point[idx])
+            try:
+                result = self.G.add(entry, point[idx])
+                return result
+            except Exception as e:
+                print(f"\nDEBUG ERROR in compute_entry_plus_var:")
+                print(f"  entry = {entry}, type = {type(entry)}")
+                print(f"  point[{idx}] = {point[idx]}, type = {type(point[idx])}")
+                print(f"  self.G = {self.G}")
+                raise
 
     def compute_slack_args(self, row_index: RowIndex, point: np.ndarray):
         row = self.get_row(row_index)
@@ -101,17 +109,13 @@ class LP:
                 old_sign = result[0][1]
                 old_entry = result[0][2]
 
-                print("Var:", old_sign)
 
                 old_slack = self.compute_entry_plus_var(old_entry, old_col_index, point)
                 cmp_val = self.G.compare(slack, old_slack)
-                print("Compare:", cmp_val)
                 if cmp_val == 0:
                     result.append((col_index, sign, entry))
-                elif cmp_val == 1:  # slack < old_slack → new minimum found
+                elif cmp_val == -1:  # slack < old_slack → new minimum found
                     result = [(col_index, sign, entry)]
-
-            print(f"\nResult n° {i} slack args:", result)
 
         return result
 

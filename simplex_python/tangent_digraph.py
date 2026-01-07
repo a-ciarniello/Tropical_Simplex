@@ -67,15 +67,18 @@ class TangentDigraph:
         for i in range(nb_ineq):
             arg = lp.compute_slack_args((linear_prog.RowKind.INEQ, i), point)
 
-            print(linear_prog.RowKind.INEQ, i, "args:", arg)
+            # Debug: uncomment to see which variables are active for each inequality at this point
+            # print(linear_prog.RowKind.INEQ, i, "args:", arg)
 
             # Check if the inequality is saturated (has both + and -)
             has_pos = any(sign == linear_prog.Sign.POS for _, sign, _ in arg)
             has_neg = any(sign == linear_prog.Sign.NEG for _, sign, _ in arg)
 
-            # SPECIAL CASE: Allow inequality 0 (infinity plane in PhaseI) to be violated initially
-            # The simplex method will handle it during pivoting
-            if not has_pos:                
+            # Allow purely-negative rows (e.g., infinity plane in Phase I) to be initially non-saturated
+            if not has_pos:
+                all_neg = all(sign == linear_prog.Sign.NEG for _, sign, _ in arg)
+                if all_neg:
+                    continue
                 raise ValueError(f"Error while initializing tangent digraph. "
                                f"Input point does not satisfy inequality indexed by {i}")
             

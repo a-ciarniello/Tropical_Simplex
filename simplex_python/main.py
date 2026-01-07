@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import sys
+import os
+from datetime import datetime
 from enum import Enum
 import numeric, group, linear_prog, parser
 from simplet import Simplet
@@ -66,34 +68,49 @@ def run_main(input_filename: str,
  
     lp: LP = LPmod.init(var_names_fun, nb_var, obj, ineq)
 
+    # Create log file name with current date and time
+    timestamp = datetime.now().strftime("%Y_%m_%d--%H.%M.%S")
+    log_file_name = f"{log_file_name}_{timestamp}.txt"
 
-    log: Optional[TextIO] = open(log_file_name, "w", encoding="utf-8")
+    os.makedirs(os.path.dirname("Logs/"), exist_ok=True)
+    save_path = os.path.join("Logs/", log_file_name)
+
+    log: Optional[TextIO] = open(save_path, "w", encoding="utf-8")
     try:
         if log:
-            print("\n parsed successfully\n", file=log)
+            print(f"Input file: {input_filename}\n\nparsed successfully\n", file=log)
         lp.pretty_print()
 
         basic_point_given = basic_point_list.size > 0 if hasattr(basic_point_list, 'size') else len(basic_point_list) > 0
 
 
         if basic_point_given:
-            # ----- Caso: base fornita -> Fase II diretta -----
-            basic_point = np.array(basic_point_list)
-            Simp = Simplet(LPmod._impl)
-            phaseII = Simp.init(lp, basic_point)
+            # ----- Caso: base fornita -> tentativo Fase II diretta, con fallback a Fase I -----
+            try:
+                basic_point = np.array(basic_point_list)
+                Simp = Simplet(LPmod._impl)
+                phaseII = Simp.init(lp, basic_point)
 
-            print("applying tropical simplex method with given input basic point")
-            if log: print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
+                print("applying tropical simplex method with given input basic point")
+                if log:
+                    print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
 
-            # Select the appropriate pivot rule based on the objective direction
-            pivot_rule = Simp.get_pivot_rule_for_objective(maximize=is_maximize)
-            Simp.solve(phaseII, pivot_rule, log)
+                pivot_rule = Simp.get_pivot_rule_for_objective(maximize=is_maximize)
+                Simp.solve(phaseII, pivot_rule, log, max_iterations=1000)
 
-            opt = Simp.basic_point(phaseII)
-            opt_projected = opt.copy()  # Copia l'array NumPy
-            return (Solution.OPTIMUM, opt_projected)
+                opt = Simp.basic_point(phaseII)
+                opt_projected = opt.copy()
+                return (Solution.OPTIMUM, opt_projected)
 
-        else:
+            except ValueError as e:
+                print(f"Given basic point rejected ({e}), falling back to Phase I.")
+                if log:
+                    print(f"\n------------------\nGiven basic point rejected ({e}), falling back to Phase I.\n", file=log)
+                basic_point_given = False
+
+
+
+        if not basic_point_given:
             # ----- Caso: nessuna base -> Fase I + Fase II -----
             PertLP = PerturbedLP(LPmod._impl)
             phaseI_lp, basic_point = PertLP.phaseI(lp)
@@ -101,7 +118,7 @@ def run_main(input_filename: str,
             print("\n------------------\nInitial basic point for phaseI: \n", basic_point)
         
             if log:
-                print("\n------------------\nphaseI lp:\n", file=log)
+                print("\n------------------\nphaseI lp:", file=log)
 
             print("\n------------------\n \nphaseI lp constructed:")
             phaseI_lp.pretty_print()
@@ -111,9 +128,20 @@ def run_main(input_filename: str,
 
             print("solving phaseI")
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
-            # Phase I is always a minimization problem (finding feasibility)
+
+
             pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
-            SimpletI.solve(phaseI, pivot_rule_phaseI, log)
+            
+            try:
+                SimpletI.solve(phaseI, pivot_rule_phaseI, log, max_iterations=50)
+            except RuntimeError as e:
+                print(f"\n*** RuntimeError caught: {e}")
+                raise
+            except Exception as e:
+                print(f"\n*** Unexpected error: {type(e).__name__}: {e}")
+                raise
+
+            print("phaseI solved")
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
@@ -128,14 +156,14 @@ def run_main(input_filename: str,
                 print("\n---------\nphaseII lp:\n", file=log)
             phaseII_lp.pretty_print()
 
-            phaseII_basic_point = phaseI_opt_basic_point[:lp.dim()] 
+            phaseII_basic_point = PertLP.phaseII_initial_point_from_phaseI_opt(lp, phaseI_opt_basic_point)
             SimpletII = Simplet(LPmod._impl)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
             # Phase II uses the original objective direction
             pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
-            SimpletII.solve(phaseII, pivot_rule_phaseII, log)
+            SimpletII.solve(phaseII, pivot_rule_phaseII, log, max_iterations=1000)
 
 
             ub_row = PertLP.phaseII_upperbound_row(lp)
@@ -161,6 +189,9 @@ def run_main(input_filename: str,
                     return (Solution.OPTIMUM, opt_projected)
     finally:
         if log: log.close()
+
+    # Safeguard: all code paths above should return; if not, raise.
+    raise RuntimeError("run main terminated without producing a result")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

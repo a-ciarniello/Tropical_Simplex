@@ -135,9 +135,11 @@ class Simplet:
         if not tg.is_basic_point():
             raise ValueError("Simplet.init: the input point is not a basic point.")
         
-        # Check if the basic point is feasible
-        if hasattr(lp, 'is_point_feasible') and not lp.is_point_feasible(basic_point):
-            raise ValueError("Simplet.init: the input point is not feasible.")
+        # Check if the basic point is feasible (skip for Phase I perturbed LP which may start strictly satisfied on the infinity plane)
+        is_phaseI_lp = hasattr(lp, 'var_names') and callable(lp.var_names) and lp.var_names(0).startswith("phaseI_var_")
+        if not is_phaseI_lp:
+            if hasattr(lp, 'is_point_feasible') and not lp.is_point_feasible(basic_point):
+                raise ValueError("Simplet.init: the input point is not feasible.")
         
         # Create the instance
         simplet_inst = Simplet.SimpletInstance(lp, basic_point)
@@ -461,8 +463,9 @@ class Simplet:
         nb_ineq = inst.lp.nb_ineq()
         
         for i in range(nb_ineq):
-            # Verify if the ineq is a hyp_node (in the basis) using TangentDigraph
-            if inst.tangent_digraph is None or not inst.tangent_digraph.is_hyp_node(i):
+            # Check if inequality is in the basis using ineq_status (not tangent digraph)
+            # This is critical for degenerate pivots where tangent digraph doesn't change
+            if inst.ineq_status[i] != IneqStatus.BASIS:
                 continue
                 
             red_cost = inst.reduced_costs[i]
@@ -489,8 +492,9 @@ class Simplet:
         nb_ineq = inst.lp.nb_ineq()
         
         for i in range(nb_ineq):
-            # Verify if the ineq is a hyp_node (in the basis) using TangentDigraph
-            if inst.tangent_digraph is None or not inst.tangent_digraph.is_hyp_node(i):
+            # Check if inequality is in the basis using ineq_status (not tangent digraph)
+            # This is critical for degenerate pivots where tangent digraph doesn't change
+            if inst.ineq_status[i] != IneqStatus.BASIS:
                 continue
                 
             red_cost = inst.reduced_costs[i]
@@ -580,7 +584,7 @@ class Simplet:
             else:
                 inst.ineq_status[i] = IneqStatus.ENT_HYP
         
-        # 2. Mark hyp node as leaving the basis
+        # 2. Mark hyp node as leaving the basis (permanently remove it to prevent cycling)
         inst.ineq_status[i_out] = IneqStatus.INACTIVE
         
         # 3. Find the unique incoming arc to hyp node i_out
@@ -600,6 +604,7 @@ class Simplet:
         self._compute_arg_lambdas(inst)
         
         # 7. Traverse the tropical edge
+        # Note: If direction is empty (affine incoming arc), point won't change but basis will
         new_point = self._traverse_tropical_edge(inst, incoming_var_index, incoming_entry)
         
         # 8. Update data structures
@@ -608,6 +613,18 @@ class Simplet:
         
         # Rebuild tangent digraph from the new point
         inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(inst.lp, new_point)
+        
+        # Update ineq_status based on the new tangent digraph
+        # CRITICAL: Don't re-add the inequality that just left the basis (i_out)
+        # This prevents cycling when point doesn't change (degenerate pivot)
+        for i in range(nb_ineq):
+            if i == i_out:
+                # Keep it INACTIVE - it left the basis and should not return
+                inst.ineq_status[i] = IneqStatus.INACTIVE
+            elif inst.tangent_digraph.is_hyp_node(i):
+                inst.ineq_status[i] = IneqStatus.BASIS
+            else:
+                inst.ineq_status[i] = IneqStatus.INACTIVE
         
         # Recompute data structures after pivot
         self._compute_arg_slacks_pos(inst)
@@ -730,7 +747,7 @@ class Simplet:
         # Move the point in the computed direction
         for j in inst.direction:
             if j < len(current_point):
-                # x_j := x_j + lambda_max
+                # x_j := x_j + lambda_max (tropical addition, which is max for max-plus, min for min-plus)
                 current_point[j] = self.G.add(current_point[j], lambda_max)
         
         return current_point
@@ -740,6 +757,7 @@ class Simplet:
         inst: "Simplet.SimpletInstance",
         pivot_rule: Callable[["Simplet.SimpletInstance"], Optional[int]],
         log: Optional[TextIO] = None,
+        max_iterations: int = 10000
     ) -> None:
         """
         Solve the tropical LP by iterating pivots until optimality is reached.
@@ -749,6 +767,10 @@ class Simplet:
             pivot_rule: Function that selects which inequality should leave the basis.
                         Returns None when optimal.
             log: Optional output stream for logging the solving process.
+            max_iterations: Maximum number of iterations to prevent infinite loops (default: 10000).
+        
+        Raises:
+            RuntimeError: If maximum iterations reached without finding optimal solution.
         """
         nb_iter = 1
         is_optimal = False
@@ -758,6 +780,14 @@ class Simplet:
                 print(format_str % args, file=outchannel)
         
         while not is_optimal:
+            if nb_iter > max_iterations:
+                error_msg = f"\n*** MAXIMUM ITERATIONS REACHED ({max_iterations}) ***\n"
+                error_msg += f"The simplex algorithm may be cycling or the problem is unbounded.\n"
+                error_msg += f"Current iteration: {nb_iter}\n"
+                myprintf(log, error_msg)
+                print(error_msg)
+                raise RuntimeError(f"Simplex solver exceeded maximum iterations ({max_iterations})")
+            
             myprintf(log, "\niteration %d", nb_iter)
             self.print_status(inst, log)
             

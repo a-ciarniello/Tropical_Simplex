@@ -1,162 +1,98 @@
 from __future__ import annotations
 import numpy as np
-from typing import Any, Callable, List, Tuple, Dict, Optional, TextIO
+from typing import Any, List, Tuple, Optional
 import group, linear_prog
 from linear_prog import LP, Sign, ColKind, RowKind, ColIndex, RowIndex
+
 
 class PinftyError(Exception):
     """Exception raised when projection results in positive infinity."""
     pass
 
+
 class PerturbedLP:
-    """
-    Python translation of the PertLP OCaml module.
-    
-    This class takes a linear program (LP) defined over an ordered group G
-    and constructs perturbed versions of it (Phase I and Phase II LPs)
-    over a new group F * G * H, where F and H are integer groups used for perturbation.
-    This process is detailed in sections 4.4.1 and 4.4.2 of "Tropical aspects of
-    linear programming" by Pascal Benchimol, 2014.
-    """
+    """Factory for Phase I/II perturbed LPs (F×G×H) built from an LP over G."""
 
     def __init__(self, lp_module: linear_prog.LinearProg):
-        """
-        Initializes the perturbed LP factory.
-
-        Args:
-            lp_module: An instance of linear_prog.LinearProg for the original group.
-        """
-        # Original group G (for tropical operations on coefficients)
+        # Base group G
         self.G = lp_module.G
-        
-        # IMPORTANT: Coordinates of basic points use standard algebra (0.0), not tropical zero (±inf)
-        # This numeric module is used only for coordinate values in the G component of (F, G, H)
+
+        # Coordinates use classical float arithmetic
         import numeric
         self.CoordNumeric = numeric.NumericFloat()
-        
-        # Perturbation groups F and H use standard integer group (NOT tropical!)
-        # F and H are used for perturbation coefficients, not for tropical operations
+
+        # Perturbation groups (integer, classical order)
         self.F = group.IntGroup()
         self.H = group.CartesianPowerSparse(group.IntGroup())
-        
-        # We model the cartesian triple (F, G, H) using CartesianTriple (flat tuple structure)
-        # This matches OCaml's MakeCartesianTriple implementation
+
+        # Product group (F, G, H)
         self.PertG = group.CartesianTriple(self.F, self.G, self.H)
-        
-        # Create a LinearProg factory for the new perturbed group
+
+        # LP factory over (F, G, H)
         self.LP_pert_mod = linear_prog.LinearProg(self.PertG)
 
-    # === Group Helper Methods for (F, G, H) tuples ===
+    # === Helpers for (F,G,H) ===
     def _from_entries(self, f: int, g: Any, h: List[Tuple[int, int]]) -> Any:
-        """Creates a perturbed group element from f, g, and h components."""
         return self.PertG.from_entries(f, g, h)
 
     def _first(self, fgh: Any) -> int:
-        """Extracts the F component from a perturbed element."""
         return self.PertG.first(fgh)
 
     def _second(self, fgh: Any) -> Any:
-        """Extracts the G component from a perturbed element."""
         return self.PertG.second(fgh)
 
     def _third(self, fgh: Any) -> List[Tuple[int, int]]:
-        """Extracts the H component from a perturbed element."""
         return self.PertG.third(fgh)
 
-    # === Debugging / Formatting Methods ===
+    # === Debug formatting ===
     def _format_row(self, row: List[Tuple[ColIndex, Sign, Any]]) -> str:
-        """Return a readable string representation for a perturbed row."""
-        entries = []
+        parts = []
         for col_index, sign, fgh in row:
-            fgh_str = self.PertG.to_string(fgh)
-            if sign == Sign.POS:
-                sign_str = "POS"
-            else:
-                sign_str = "NEG"
-
-            if col_index[0] == ColKind.VAR:
-                col_str = f"VAR {col_index[1]}"
-            else:
-                col_str = f"AFFINE"
-            entries.append(f"{sign_str}, {col_str}: {fgh_str}")
-        return "; ".join(entries)
+            sign_str = "POS" if sign == Sign.POS else "NEG"
+            col_str = f"VAR {col_index[1]}" if col_index[0] == ColKind.VAR else "AFFINE"
+            parts.append(f"{sign_str}, {col_str}: {self.PertG.to_string(fgh)}")
+        return "; ".join(parts)
 
     def _format_matrix(self, matrix: List[List[Tuple[ColIndex, Sign, Any]]]) -> str:
-        """Return a multi-line string showing one row per line."""
-        lines = []
-        for idx, row in enumerate(matrix):
-            lines.append(f"Row {idx}: {self._format_row(row)}")
-        return "\n".join(lines)
-    # === END Debugging / Formatting Methods ===
+        return "\n".join(f"Row {i}: {self._format_row(row)}" for i, row in enumerate(matrix))
 
-    # === Core Public Methods ===
-
+    # === Core public methods ===
     def project(self, fgh: Any) -> Optional[Any]:
-        """
-        Projects a perturbed value back to the original group G.
-        - Returns g if f == 0.
-        - Returns None (representing -inf) if f < 0.
-        - Raises PinftyError if f > 0.
-        """
         f = self._first(fgh)
         if f > 0:
             raise PinftyError("Projection would result in positive infinity")
-        elif f == 0:
+        if f == 0:
             return self._second(fgh)
-        else:  # f < 0
-            return None
+        return None
 
     def phaseII_upperbound_row(self, lp: LP) -> int:
-        """Index of the row that enforces upper bounds in phaseII."""
         return lp.dim() + lp.nb_ineq()
 
     def phaseI_infeasibility_var_lower_bound_row(self, lp: LP) -> int:
-        """Index of the row that enforces a lower bound on the phaseI extra variable."""
-        # Note: In the original logic, this row ends up at the same index as the phaseII upper bound row
-        # due to the construction order and list reversals.
         return lp.dim() + lp.nb_ineq()
 
     def phaseI(self, lp: LP) -> Tuple[LP, np.ndarray]:
-        """
-        Constructs the Phase I LP to find a feasible basic point.
-        
-        Returns:
-            A tuple containing the Phase I LP and an initial basic point for it.
-        """
-
-
-        # --- 1. Define constant perturbed values ---
         phaseI_lower_bound = self._from_entries(-3, self.CoordNumeric.zero, self.H.zero())
         upper_bound = self._from_entries(1, self.CoordNumeric.zero, self.H.zero())
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
         infeasibility_var_idx = dim
 
-
-        # --- 2. Process input inequalities ---
+        # Process input inequalities
         processed_rows = self._process_input_rows(lp)
-
         identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
         for row in processed_rows:
-            
-            new_coeff = ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
-            row.append(new_coeff)
+            row.append(((ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff))
 
-
-        # --- 3. Build other rows ---
+        # Other structural rows
         lower_bounds_rows = self._lower_bounds_builder(lp)
-        identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
         infeasibility_var_lb_row = [
-            ( (ColKind.AFFINE, None), Sign.NEG, phaseI_lower_bound ),
-            ( (ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff )
+            ((ColKind.AFFINE, None), Sign.NEG, phaseI_lower_bound),
+            ((ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff),
         ]
+        inf_plane_row = [((ColKind.VAR, infeasibility_var_idx), Sign.NEG, identity_coeff)] + self._infinity_plane_row(dim, upper_bound)
 
-        phaseII_inf_plane = self._infinity_plane_row(dim, upper_bound)
-        inf_plane_row = [( (ColKind.VAR, infeasibility_var_idx), Sign.NEG, identity_coeff )] + phaseII_inf_plane
-
-
-        # --- 4. Assemble and perturb the matrix ---
+        # Assemble and perturb matrix
         matrix = lower_bounds_rows + processed_rows
-
         matrix.insert(0, infeasibility_var_lb_row)
         matrix.insert(0, inf_plane_row)
 
@@ -164,167 +100,220 @@ class PerturbedLP:
 
         nb_columns = dim + 2
         matrix.reverse()
-
         perturbed_m = self._epsilon_perturbation(matrix, 1, nb_columns)
-
         perturbed_m.reverse()
 
         print(f"\n Perturbed matrix created: \n{self._format_matrix(perturbed_m)}\n")
 
-        perturbed_matrix = perturbed_m
-
-
-        # --- 5. Assemble and perturb the objective function ---
-        identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
-        objective_row = [((ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff)]
-        perturbed_objective = self._epsilon_perturb_row(objective_row, 0, nb_columns)
-        
-
-        # --- 6. Create the Phase I LP ---
         phaseI_lp = self.LP_pert_mod.init(
             var_names=lambda j: f"phaseI_var_{j}",
             nb_var=dim + 1,
-            objective=perturbed_objective,
-            ineqs=perturbed_matrix
+            objective=self._epsilon_perturb_row([((ColKind.VAR, infeasibility_var_idx), Sign.POS, identity_coeff)], 0, nb_columns),
+            ineqs=perturbed_m,
         )
 
-
-        # --- 7. Compute the initial basic point ---
+        # Initial basic point
         initial_basic_point = np.empty(dim + 1, dtype=object)
-
-        
         for j in range(dim):
-
             i = 1 + nb_ineq + j
             l = self._lower_bound(j, lp)
-        
-
             h_pert = self.H.add(
                 self.H.neg(self._epsilon_perturbation_coeff(i, j, nb_columns)),
-                self.H.neg(self._epsilon_perturbation_coeff(i, nb_columns - 1, nb_columns))
+                self.H.neg(self._epsilon_perturbation_coeff(i, nb_columns - 1, nb_columns)),
             )
+            initial_basic_point[j] = self.PertG.add(l, self._from_entries(0, self.CoordNumeric.zero, h_pert))
 
-            pertl = self.PertG.add(l, self._from_entries(0, self.CoordNumeric.zero, h_pert))
-            initial_basic_point[j] = pertl
-            
+        # Infeasibility variable: saturate its lower-bound row (index dim + nb_ineq in perturbed matrix)
         j = dim
-        i = 1 + nb_ineq + dim + 1
-        l = upper_bound
-        h_pert = self.H.add(
-            self._epsilon_perturbation_coeff(i, j, nb_columns),
-            self._epsilon_perturbation_coeff(i, nb_columns - 1, nb_columns)
-        )
+        h_terms = []
+        w_row_index = dim + nb_ineq + 1  # row_index used during perturbation for w lower bound
+        h_terms.extend(self.H.neg(self._epsilon_perturbation_coeff(w_row_index, j, nb_columns)))
+        h_terms.extend(self.H.neg(self._epsilon_perturbation_coeff(w_row_index, nb_columns - 1, nb_columns)))
+        h_pert = self.H.from_list(h_terms)
+        initial_basic_point[j] = self.PertG.add(phaseI_lower_bound, self._from_entries(0, self.CoordNumeric.zero, h_pert))
 
-        pertl = self.PertG.add(l, self._from_entries(0, self.CoordNumeric.zero, h_pert))
-        initial_basic_point[j] = pertl
-        
         return (phaseI_lp, initial_basic_point)
 
-
     def phaseII(self, lp: LP) -> LP:
-        """
-        Constructs the perturbed Phase II LP from the original LP.
-        """
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
         upper_bound = self._from_entries(1, self.CoordNumeric.zero, self.H.zero())
-        
 
-        # --- 1. Process input rows and add lower bounds ---
         processed_input_rows = self._process_input_rows(lp)
-        matrix = self._lower_bounds_builder(lp) + processed_input_rows
-        
+        lower_bounds_rows = self._lower_bounds_builder(lp)
 
-        # --- 2. Perturb the main matrix ---
-        nb_columns = dim + 1 # Original vars + affine
-        perturbed_matrix = self._epsilon_perturbation(matrix, 1, nb_columns)
-        
+        nb_columns = dim + 1
 
-        # --- 3. Create and perturb the infinity plane row separately ---
+        # Perturb original inequalities first: row indices 1..nb_ineq
+        perturbed_input = self._epsilon_perturbation(processed_input_rows, 1, nb_columns)
+
+        # Perturb lower bounds after inequalities: row indices (1 + nb_ineq)..(nb_ineq + dim)
+        perturbed_lbs = self._epsilon_perturbation(lower_bounds_rows, 1 + nb_ineq, nb_columns)
+
+        # Infinity plane gets the last index (nb_ineq + dim)
         infinity_plane = self._infinity_plane_row(dim, upper_bound)
-        pert_inf_plane = self._epsilon_perturbation([infinity_plane], dim + nb_ineq + 2, nb_columns)
-        
-        final_matrix = perturbed_matrix + pert_inf_plane
+        pert_inf_plane = self._epsilon_perturbation(
+            [infinity_plane], 1 + nb_ineq + dim, nb_columns
+        )
 
+        # Final matrix order: lower bounds, original inequalities, infinity plane
+        final_matrix = perturbed_lbs + perturbed_input + pert_inf_plane
 
-        # --- 4. Process and perturb the objective function ---
         obj_row_g = lp.get_row((RowKind.OBJECTIVE, None))
         objective_row = self._g_row_to_fgh_row(obj_row_g)
         perturbed_objective = self._epsilon_perturb_row(objective_row, 0, nb_columns)
-        
 
-        # --- 5. Create the Phase II LP ---
-        phaseII_lp = self.LP_pert_mod.init(
+        return self.LP_pert_mod.init(
             var_names=lp.var_names,
             nb_var=dim,
             objective=perturbed_objective,
-            ineqs=final_matrix
+            ineqs=final_matrix,
         )
-        
-        return phaseII_lp
-    
 
-    # === Helper Methods ===
-    
+    def phaseII_initial_point_from_phaseI_opt(
+        self, lp: LP, phaseI_opt: np.ndarray
+    ) -> np.ndarray:
+        """Build a basic Phase II starting point aligned with Phase II ε indices.
+
+        We reuse the F and G components from the Phase I optimum, but rebuild the H
+        component so that each variable saturates its lower-bound row in Phase II.
+        """
+
+        dim, nb_ineq = lp.dim(), lp.nb_ineq()
+        nb_columns = dim + 1
+        initial_basic_point = np.empty(dim, dtype=object)
+
+        # Lower-bound rows are perturbed starting at row_index = 1 + nb_ineq.
+        # _lower_bounds_builder inserts rows in reverse (j = dim-1 .. 0),
+        # so variable j sits at row_index = 1 + nb_ineq + (dim-1-j).
+        for j in range(dim):
+            row_index = 1 + nb_ineq + (dim - 1 - j)
+
+            h_terms = self.H.add(
+                self.H.neg(self._epsilon_perturbation_coeff(row_index, j, nb_columns)),
+                self.H.neg(
+                    self._epsilon_perturbation_coeff(row_index, nb_columns - 1, nb_columns)
+                ),
+            )
+
+            # Tie with all original inequalities (row_index 1..nb_ineq in Phase II perturbation)
+            # so that POS and NEG reach the same slack on each row.
+            for tie_row_index in range(1, 1 + nb_ineq):
+                h_terms = self.H.add(
+                    h_terms,
+                    self.H.neg(
+                        self._epsilon_perturbation_coeff(tie_row_index, j, nb_columns)
+                    ),
+                )
+                h_terms = self.H.add(
+                    h_terms,
+                    self.H.neg(
+                        self._epsilon_perturbation_coeff(
+                            tie_row_index, nb_columns - 1, nb_columns
+                        )
+                    ),
+                )
+
+            # Force symmetric ties on each inequality row: if row i has a POS var j,
+            # add eps to var j and the affine so that POS/NEG tie; if a row has only NEG,
+            # force a POS tie on the first variable encountered.
+            for i in range(nb_ineq):
+                row = lp.get_row((RowKind.INEQ, i))
+                row_idx = 1 + i  # perturbation index for inequality i in Phase II
+
+                pos_vars = [col for col, sign, _ in row if sign == Sign.POS and col[0] == ColKind.VAR]
+
+                # If no POS vars, pick the first var (if any) to create a POS tie
+                if not pos_vars:
+                    fallback_var = next((col for col, sign, _ in row if col[0] == ColKind.VAR), None)
+                    if fallback_var is not None:
+                        pos_vars = [fallback_var]
+
+                for col_index in pos_vars:
+                    if col_index[0] != ColKind.VAR or col_index[1] is None:
+                        continue
+                    j_var = col_index[1]
+                    # tie var j_var
+                    h_terms = self.H.add(
+                        h_terms,
+                        self.H.neg(
+                            self._epsilon_perturbation_coeff(row_idx, j_var, nb_columns)
+                        ),
+                    )
+                    h_terms = self.H.add(
+                        h_terms,
+                        self.H.neg(
+                            self._epsilon_perturbation_coeff(
+                                row_idx, nb_columns - 1, nb_columns
+                            )
+                        ),
+                    )
+                    # symmetric tie on affine (opposite sign to keep the same magnitude)
+                    h_terms = self.H.add(
+                        h_terms,
+                        self.H.neg(
+                            self.H.neg(
+                                self._epsilon_perturbation_coeff(
+                                    row_idx, nb_columns - 1, nb_columns
+                                )
+                            )
+                        ),
+                    )
+
+            base = self._from_entries(
+                self._first(phaseI_opt[j]),
+                self._second(phaseI_opt[j]),
+                self._third(phaseI_opt[j]),
+            )
+
+            initial_basic_point[j] = self.PertG.add(
+                base, self._from_entries(0, self.CoordNumeric.zero, h_terms)
+            )
+
+        return initial_basic_point
+
+    # === Helper methods ===
     def _affine_perturbation(self, row_index: int, lp: LP) -> Any:
-        """Perturbation for rows without an affine term.
-        Uses standard zero for coordinate value."""
         return self._from_entries(-1, self.CoordNumeric.zero, self.H.zero())
 
     def _lower_bound(self, col_index: int, lp: LP) -> Any:
-        """Perturbation for lower bounds on variables.
-        Uses standard zero for coordinate value."""
         return self._from_entries(-2, self.CoordNumeric.zero, self.H.zero())
 
     def _epsilon_perturbation_coeff(self, i: int, j: int, nb_columns: int) -> List[Tuple[int, int]]:
-        """Creates the H component (sparse vector) for perturbation."""
         return self.H.from_list([(i * nb_columns + j, 1)])
 
     def _epsilon_perturb_row(self, row: List, row_index: int, nb_columns: int) -> List:
-        """Applies epsilon perturbation to a single row."""
         new_row = []
         for col_index, sign, fgh in row:
-            if col_index[0] == ColKind.VAR:
-                j = col_index[1]
-            else: # Affine
-                j = nb_columns - 1
-            
+            j = col_index[1] if col_index[0] == ColKind.VAR else nb_columns - 1
             f = self._first(fgh)
             g = self._second(fgh)
             h = self._epsilon_perturbation_coeff(row_index, j, nb_columns)
-
             if sign == Sign.NEG:
                 h = self.H.neg(h)
-            
             pert_fgh = self._from_entries(f, g, h)
             new_row.insert(0, (col_index, sign, pert_fgh))
         return new_row
 
     def _epsilon_perturbation(self, rows: List, first_row_index: int, nb_columns: int) -> List:
-        """Applies epsilon perturbation to a list of rows."""
         new_rows = []
         for i, row in enumerate(rows):
             row_index = i + first_row_index
             new_row = self._epsilon_perturb_row(row, row_index, nb_columns)
-           
             new_rows.insert(0, new_row)
         return new_rows
 
     def _g_row_to_fgh_row(self, old_row: List) -> List:
-        """Converts a row with entries in G to a row with entries in PertG (F=0, H=0)."""
-        new_row = []
-        for col_index, sign, g in old_row:
-            fgh = self._from_entries(0, g, self.H.zero())
-            new_row.append((col_index, sign, fgh))
-        return new_row
+        return [
+            (col_index, sign, self._from_entries(0, g, self.H.zero()))
+            for col_index, sign, g in old_row
+        ]
 
     def _process_input_rows(self, lp: LP) -> List:
-        """Processes original inequalities for perturbation."""
         new_rows = []
         for i in range(lp.nb_ineq()):
             old_row = lp.get_row((RowKind.INEQ, i))
-            processed_row = self._g_row_to_fgh_row(old_row)            
-            # If the original row has no affine term, add a perturbed one.
-            has_affine = any(c[0] == ColKind.AFFINE for c in old_row)
+            processed_row = self._g_row_to_fgh_row(old_row)
+            has_affine = any(c[0][0] == ColKind.AFFINE for c in old_row)
             if not has_affine:
                 fgh = self._affine_perturbation(i, lp)
                 processed_row.append(((ColKind.AFFINE, None), Sign.POS, fgh))
@@ -332,24 +321,20 @@ class PerturbedLP:
         return new_rows
 
     def _infinity_plane_row(self, dim: int, upper_bound: Any) -> List:
-        """Builds the row representing the 'infinity plane' (upper bounds).
-        Uses multiplicative identity (G.one) for variable coefficients."""
-        row: List[Tuple[ColIndex, Sign, Any]] = [( (ColKind.AFFINE, None), Sign.POS, upper_bound )]
+        row: List[Tuple[ColIndex, Sign, Any]] = [((ColKind.AFFINE, None), Sign.POS, upper_bound)]
         identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
         for j in range(dim):
-            row.append(( (ColKind.VAR, j), Sign.NEG, identity_coeff ))
+            row.append(((ColKind.VAR, j), Sign.NEG, identity_coeff))
         return row
 
     def _lower_bounds_builder(self, lp: LP) -> List:
-        """Builds the rows representing lower bounds on original variables.
-        Uses multiplicative identity (G.one) for variable coefficients."""
         rows = []
         identity_coeff = self._from_entries(0, self.G.one(), self.H.zero())
         for j in range(lp.dim()):
             fgh = self._lower_bound(j, lp)
             row: List[Tuple[ColIndex, Sign, Any]] = [
-                ( (ColKind.AFFINE, None), Sign.NEG, fgh ),
-                ( (ColKind.VAR, j), Sign.POS, identity_coeff )
+                ((ColKind.AFFINE, None), Sign.NEG, fgh),
+                ((ColKind.VAR, j), Sign.POS, identity_coeff),
             ]
             rows.insert(0, row)
         return rows

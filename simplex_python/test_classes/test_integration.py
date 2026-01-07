@@ -21,12 +21,12 @@ LPmod = linear_prog.LinearProg(G)
 print("Loading LP from file problems/test.lp...")
 try:
     content = parser.lexer_from_file("problems/test.lp")
-    semiring, var_names, objective, ineqs, basic_point_list = parser.parse_simple_lp(content)
+    numeric_name, var_names, objective, ineqs, basic_point, is_maximize = parser.parse_lp(content)
     
     # Create LP
     nb_vars = len(var_names)
     lp = LPmod.init(lambda j: f"x{j}", nb_vars, objective, ineqs)
-    basic_point = np.array(basic_point_list)
+    basic_point = np.array(basic_point)
     
     print(f"LP loaded successfully!")
     print(f"Variables: {var_names}")
