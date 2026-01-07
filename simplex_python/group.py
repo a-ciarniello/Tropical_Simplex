@@ -298,7 +298,8 @@ class CartesianTriple(OrderedGroup):
     def mul(self, a, b):
         f1, g1, h1 = a
         f2, g2, h2 = b
-        return (self.F.mul(f1, f2), self.G.mul(g1, g2), self.H.mul(h1, h2))
+        # Tropical multiplication = component-wise addition on (F,G,H)
+        return (self.F.add(f1, f2), self.G.mul(g1, g2), self.H.add(h1, h2))
 
     def compare(self, a, b):
         """Lexicographic comparison: F first, then G, then H."""
@@ -385,7 +386,8 @@ class CartesianPowerSparse(OrderedGroup):
             ix, vx = x[i]
             iy, vy = y[j]
             if ix == iy:
-                s = self.G.mul(vx, vy)
+                # Multiply corresponds to adding exponents in the base group
+                s = self.G.add(vx, vy)
                 if self.G.compare(s, self.G.zero()) != 0:
                     res.append((ix, s))
                 i += 1

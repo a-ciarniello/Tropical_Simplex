@@ -75,7 +75,7 @@ class TestTangentDigraph(unittest.TestCase):
     def test_add_and_remove_arc(self):
         """Verify consistency of arc addition and removal"""
         tg = tangent_digraph.TangentDigraph.compute(self.lp, self.point_feasible)
-        var_index = (linear_prog.ColKind.VAR, 0)
+        var_index = (linear_prog.ColKind.VAR, 2)
         i = 0
         tg.add_arc(var_index, i, linear_prog.Sign.POS, 1.23)
         self.assertTrue(any(v == var_index for v, _, _ in tg.ineq_nodes[i]))

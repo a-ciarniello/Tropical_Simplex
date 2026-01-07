@@ -69,8 +69,8 @@ class TestPerturbedLP(unittest.TestCase):
         self.assertIsInstance(self.pert_lp.F, group.IntGroup)
         self.assertIsInstance(self.pert_lp.H, group.CartesianPowerSparse)
         
-        # The perturbed group PertG should be a CartesianProduct
-        self.assertIsInstance(self.pert_lp.PertG, group.CartesianProduct)
+        # The perturbed group PertG should be a CartesianTriple
+        self.assertIsInstance(self.pert_lp.PertG, group.CartesianTriple)
         
         # The internal LP factory should use the new perturbed group
         self.assertIs(self.pert_lp.LP_pert_mod.G, self.pert_lp.PertG)

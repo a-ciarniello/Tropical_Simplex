@@ -1,913 +1,505 @@
-from typing import Any, Callable, Optional, Tuple, TextIO, List
-from enum import Enum
+from __future__ import annotations
+from typing import Any, Callable, List, Optional, Tuple
+import sys
 import numpy as np
 import linear_prog
 import tangent_digraph
+import group
 
+# Faithful-ish port of simplex_ocaml/src/simplet.ml.
+# Provides the same public API shape as simplex_python/simplet.py but with a class closer to the OCaml control flow.
 
-class IneqStatus(Enum):
-    """
-    Status of inequalities during the tropical pivoting process.
-    
-    Attributes:
-        BREAK_HYP: Inequality that was in the basis and might be violated
-                   during movement along the pivoting direction.
-        BASIS: Inequality currently saturated by the basic point (in the basis).
-        ENT_HYP: Inequality that might enter the basis during pivoting.
-        INACTIVE: Inequality leaving the basis and no longer considered.
-    """
-    BREAK_HYP = "BreakHyp"
-    BASIS = "Basis" 
-    ENT_HYP = "EntHyp"
-    INACTIVE = "Inactive"
+IneqStatus = linear_prog.Sign  # use Sign for reduced_cost sign values
 
 
 class Simplet:
-    """
-    Python translation of Simplet.Make(LP).
-    
-    Implements the tropical simplex algorithm described in Chapter 7 of
-    "Tropical aspects of linear programming", Pascal Benchimol, PhD Thesis, 2014.
-    
-    This module provides the core functionality for solving tropical linear programs
-    using a simplex-like algorithm adapted to the tropical semiring.
-    """
-
     def __init__(self, lp_module_or_instance):
-        """
-        Initialize the Simplet module with reference to the LinearProg module or LP instance.
-        
-        Args:
-            lp_module_or_instance: Either an LP instance or the LinearProg module.
-                                   If it's an LP instance, it should have 'G' and 'nb_ineq' attributes.
-                                   If it's a module, it should have a 'G' attribute for the group.
-        """
-        if hasattr(lp_module_or_instance, 'G') and hasattr(lp_module_or_instance, 'nb_ineq'):
-            # It's an LP instance
-            self.LP = lp_module_or_instance
-            self.G = lp_module_or_instance.G
+        if hasattr(lp_module_or_instance, "G") and hasattr(lp_module_or_instance, "nb_ineq"):
+            self.LP = lp_module_or_instance  # LP instance
+            self.G: group.OrderedGroup = lp_module_or_instance.G
         else:
-            # It's a module
-            self.LP = lp_module_or_instance  
-            self.G = lp_module_or_instance.G
+            self.LP = lp_module_or_instance  # LP module
+            self.G: group.OrderedGroup = lp_module_or_instance.G
 
-    class SimpletInstance:
-        """
-        An instance of the tropical simplet containing all necessary data structures.
-        Corresponds to the type 't' in the original OCaml module.
-        
-        Attributes:
-            lp: The tropical linear program.
-            point: The current basic point.
-            tangent_digraph: The tangent digraph at the current basic point.
-            arg_slacks: Graph between inequality i and argmax_j (|W^+_ij| + x_j).
-            var_in_arg_slack: Inverse indexing for arg_slacks by variable.
-            affine_var_in_arg_slack: Inequalities where affine variable is in arg_slack.
-            direction: List of variable indices defining the pivoting direction.
-            arg_lambdas: For each inequality, argmax_{j in direction} (|W_ij| + x_j).
-            ineq_status: Status of each inequality (BASIS, BREAK_HYP, ENT_HYP, INACTIVE).
-            max_permutation: Maximizing permutation sigma : [n] -> I in tropical permanent of A_I.
-            reduced_costs: Reduced costs for each inequality.
-            dual_slacks: Dual slacks for each variable.
-            var_seen: Boolean array for Dijkstra algorithm.
-            iteration: Iteration counter.
-        """
-        
-        def __init__(self, lp: linear_prog.LP, basic_point: np.ndarray):
+    class Instance:
+        def __init__(self, lp: linear_prog.LP, point: np.ndarray):
             self.lp = lp
-            self.point = basic_point.copy()  # Current basic point
-            
-            # Main data structures
-            self.tangent_digraph: Optional[tangent_digraph.TangentDigraph] = None
-            
-            # Graph between Ineq i and argmax_j (|W^+_ij| + x_j)
-            self.arg_slacks: List[List[Tuple[Any, Any]]] = [[] for _ in range(lp.nb_ineq())]
-            self.var_in_arg_slack: List[List[int]] = [[] for _ in range(lp.dim())]
+            self.point = point.copy()
+            self.tangent_digraph: tangent_digraph.TangentDigraph = tangent_digraph.TangentDigraph.compute(lp, point)
+            nb_ineq = lp.nb_ineq()
+            dim = lp.dim()
+            self.arg_slacks: List[List[Tuple[linear_prog.ColIndex, Any]]] = [[] for _ in range(nb_ineq)]
+            self.var_in_arg_slack: List[List[int]] = [[] for _ in range(dim)]
             self.affine_var_in_arg_slack: List[int] = []
-            
-            # For pivoting
-            self.direction: List[Any] = []  # List of var_index
-            # argmax_{j in direction} (|W_ij| + x_j)
-            self.arg_lambdas: List[List[Tuple[Any, str, Any]]] = [[] for _ in range(lp.nb_ineq())]
-            self.ineq_status: List[IneqStatus] = [IneqStatus.INACTIVE for _ in range(lp.nb_ineq())]
-            
-            # For reduced costs
-            self.max_permutation: List[Optional[Tuple[int, str, Any]]] = [None for _ in range(lp.dim())]
-            self.reduced_costs: List[Optional[Tuple[str, Any]]] = [None for _ in range(lp.nb_ineq())]
-            self.dual_slacks: List[Optional[Tuple[str, Any]]] = [None for _ in range(lp.dim())]
-            self.var_seen: List[bool] = [False for _ in range(lp.dim())]  # For Dijkstra
-            
-            # Iteration counter
+            self.direction: List[linear_prog.ColIndex] = []
+            self.arg_lambdas: List[List[Tuple[linear_prog.ColIndex, str, Any]]] = [[] for _ in range(nb_ineq)]
+            self.ineq_status: List[str] = ["Inactive" for _ in range(nb_ineq)]
+            self.max_permutation: List[Optional[Tuple[int, str, Any]]] = [None for _ in range(dim)]
+            self.reduced_costs: List[Optional[Tuple[str, Any]]] = [None for _ in range(nb_ineq)]
+            self.dual_slacks: List[Optional[Tuple[str, Any]]] = [None for _ in range(dim)]
+            self.var_seen: List[bool] = [False for _ in range(dim)]
             self.iteration = 0
 
-    def init(self, lp: linear_prog.LP, basic_point: np.ndarray) -> "Simplet.SimpletInstance":
-        """
-        Create a new simplet instance for a given LP and basic point.
-        
-        Args:
-            lp: The tropical linear program (must be non-degenerate).
-            basic_point: Basic point (must be feasible and saturate exactly dim inequalities).
-            
-        Returns:
-            A fully initialized SimpletInstance.
-            
-        Raises:
-            ValueError: If basic_point is not feasible or not a basic point.
-        """
-        nb_ineq = lp.nb_ineq()
-        dim = lp.dim()
-        
-        # Verify that each row in lp has at least one non-zero coefficient
+    # ---- core helpers ----
+    def _compute_arg_slacks_pos(self, inst: "Simplet.Instance") -> None:
+        nb_ineq = inst.lp.nb_ineq()
+        dim = inst.lp.dim()
+        inst.arg_slacks = [[] for _ in range(nb_ineq)]
+        inst.var_in_arg_slack = [[] for _ in range(dim)]
+        inst.affine_var_in_arg_slack = []
         for i in range(nb_ineq):
-            try:
-                w_i = lp.get_row((linear_prog.RowKind.INEQ, i))
-                if not w_i:  # Empty list
-                    raise ValueError(f"Simplet.init: all coefficients are zero in inequality {i}. "
-                                   "At least one non-zero coefficient is required.")
-            except AttributeError:
-                # Fallback if get_row is not implemented
-                pass
-        
-        # Build the tangent digraph
-        tg = tangent_digraph.TangentDigraph.compute(lp, basic_point)
-        
-        # Verify that the given point is a basic point
-        if not tg.is_basic_point():
-            raise ValueError("Simplet.init: the input point is not a basic point.")
-        
-        # Check if the basic point is feasible (skip for Phase I perturbed LP which may start strictly satisfied on the infinity plane)
-        is_phaseI_lp = hasattr(lp, 'var_names') and callable(lp.var_names) and lp.var_names(0).startswith("phaseI_var_")
-        if not is_phaseI_lp:
-            if hasattr(lp, 'is_point_feasible') and not lp.is_point_feasible(basic_point):
-                raise ValueError("Simplet.init: the input point is not feasible.")
-        
-        # Create the instance
-        simplet_inst = Simplet.SimpletInstance(lp, basic_point)
-        simplet_inst.tangent_digraph = tg
-        
-        # Initialize ineq_status based on the tangent digraph
-        for i in range(nb_ineq):
-            if tg.is_hyp_node(i):
-                simplet_inst.ineq_status[i] = IneqStatus.BASIS
-        
-        # Compute arg_slacks and reduced_costs
-        self._compute_arg_slacks_pos(simplet_inst)
-        self._compute_reduced_costs(simplet_inst)
-        
-        return simplet_inst
+            arg_slack = inst.lp.compute_slack_args((linear_prog.RowKind.INEQ, i), inst.point)
+            pos_entries = [(col_index, entry) for col_index, sign, entry in arg_slack if sign == linear_prog.Sign.POS]
 
-    def _compute_arg_slacks_pos(self, simplet_inst: "Simplet.SimpletInstance") -> None:
-        """
-        Compute the graph between var j and argmax_j (W^+_ij + x_j) and store it in simplet_inst.
-        Corresponds to compute_arg_slacks_pos in the original OCaml.
-        
-        Uses compute_slack_args from LinearProg to find the argmin of coefficients
-        for each inequality, then filters only those with positive sign.
-        """
-        nb_ineq = simplet_inst.lp.nb_ineq()
-        dim = simplet_inst.lp.dim()
-        
-        # Reset data structures
-        simplet_inst.arg_slacks = [[] for _ in range(nb_ineq)]
-        simplet_inst.var_in_arg_slack = [[] for _ in range(dim)]
-        simplet_inst.affine_var_in_arg_slack = []
-        
-        for i in range(nb_ineq):
-            # Compute argmin for inequality i
-            arg_slack = simplet_inst.lp.compute_slack_args((linear_prog.RowKind.INEQ, i), simplet_inst.point)
-            
-            # Process each element in the argmin
-            for col_index, sign, entry in arg_slack:
-                # In OCaml, check the sign and process only positive ones
-                if sign == linear_prog.Sign.NEG:
-                    continue
-                elif sign == linear_prog.Sign.POS:
-                    # Add to arg_slacks (store only var_index and entry, not the sign)
-                    simplet_inst.arg_slacks[i].append((col_index, entry))
-                    
-                    # Update var_in_arg_slack for reverse indexing
-                    if col_index[0] == linear_prog.ColKind.AFFINE:
-                        # If it's the affine variable, add it to the special list
-                        simplet_inst.affine_var_in_arg_slack.append(i)
-                    elif col_index[0] == linear_prog.ColKind.VAR:
-                        # If it's an ordinary variable j, add it to var_in_arg_slack[j]
-                        j = col_index[1]
-                        if j is not None:
-                            simplet_inst.var_in_arg_slack[j].append(i)
-    
-    def _compute_reduced_costs(self, simplet_inst: "Simplet.SimpletInstance") -> None:
-        """
-        Compute reduced costs using Dijkstra's algorithm for longest paths.
-        Corresponds to compute_reduced_costs in the original OCaml.
-        
-        Reduced costs are calculated as distances in the bipartite graph between variables
-        and inequalities, using the tangent digraph to determine the optimal permutation.
-        """
-        nb_ineq = simplet_inst.lp.nb_ineq()
-        dim = simplet_inst.lp.dim()
-        
-        # Compute the maximizing permutation
-        self._compute_max_permutation(simplet_inst)
-        
-        # Reset data structures
-        simplet_inst.reduced_costs = [None for _ in range(nb_ineq)]
-        simplet_inst.dual_slacks = [None for _ in range(dim)]
-        simplet_inst.var_seen = [False for _ in range(dim)]
-        
-        # Compute mu = max(0, c_1+x_1, ..., c_n+x_n) from the objective function
-        mu = self._compute_objective_value(simplet_inst)
-        neg_mu = self.G.neg(mu)
-        
-        # Initialize distances from objective to variable nodes
-        self._initialize_dual_slacks_from_objective(simplet_inst, neg_mu)
-        
-        # Dijkstra's algorithm for longest paths
-        # Consider only VarNodes; when considering a VarNode j:
-        # -mark VarNode j as seen (in the tree of longest paths)
-        # -go to IneqNode sigma(j) with arc cost mu
-        # -explore unseen neighbor VarNodes of IneqNode sigma(j)
-        
-        finished = False
-        while not finished:
-            # Find the VarNode with the longest distance not yet in the tree
-            max_j = None
-            max_val = None
-            
-            for current_j in range(dim):
-                if simplet_inst.var_seen[current_j]:
-                    continue
-                
-                current_val = simplet_inst.dual_slacks[current_j]
-                if current_val is None:
-                    continue
-                    
-                if max_val is None:
-                    max_j = current_j
-                    max_val = current_val
+            # Fallback: keep a neg minimizer if no pos minimizer exists (e.g., infinity-plane rows)
+            if not pos_entries and arg_slack:
+                pos_entries = [(arg_slack[0][0], arg_slack[0][2])]
+
+            for col_index, entry in pos_entries:
+                inst.arg_slacks[i].append((col_index, entry))
+                if col_index[0] == linear_prog.ColKind.AFFINE:
+                    inst.affine_var_in_arg_slack.append(i)
                 else:
-                    current_sign, current_entry = current_val
-                    max_sign, max_entry = max_val
-                    cmp = self.G.compare(current_entry, max_entry)
-                    if cmp == 1:  # current > max
-                        max_j = current_j
-                        max_val = current_val
-            
-            if max_j is None:
-                finished = True
-            else:
-                # Mark variable as seen
-                simplet_inst.var_seen[max_j] = True
-                
-                # Get sigma(j) - the inequality corresponding to this variable
-                sigma_j_data = simplet_inst.max_permutation[max_j]
-                if sigma_j_data is None:
-                    continue
-                    
-                sigma_j, sign, entry = sigma_j_data
-                
-                # Get the dual slack (distance) at this variable
-                dual_slack_j = simplet_inst.dual_slacks[max_j]
-                if dual_slack_j is None:
-                    continue
-                j_sign, j_entry = dual_slack_j
-                
-                # Get slack of inequality sigma_j
-                arg_slack_sigma_j = simplet_inst.arg_slacks[sigma_j]
-                if not arg_slack_sigma_j:
-                    continue
-                    
-                var_slack, entry_slack = arg_slack_sigma_j[0]
-                slack_sigma_j = simplet_inst.lp.compute_entry_plus_var(entry_slack, var_slack, simplet_inst.point)
-                
-                # Compute reduced cost for inequality sigma_j
-                entry_sigma_j = self.G.add(j_entry, mu)
-                sign_sigma_j = linear_prog.Sign.POS.value if j_sign == sign else linear_prog.Sign.NEG.value
-                simplet_inst.reduced_costs[sigma_j] = (sign_sigma_j, entry_sigma_j)
-                
-                # Visit neighbors of inequality sigma_j
-                ineq_row = simplet_inst.lp.get_row((linear_prog.RowKind.INEQ, sigma_j))
-                for arc_index, arc_sign, arc_entry in ineq_row:
-                    if arc_index[0] != linear_prog.ColKind.VAR:
-                        continue
-                    
-                    arc_var_index = arc_index[1]
-                    if arc_var_index is None or simplet_inst.var_seen[arc_var_index]:
-                        continue
-                    
-                    # Compute new distance
-                    x_l = simplet_inst.point[arc_var_index]
-                    neg_slack_sigma_j = self.G.neg(slack_sigma_j)
-                    
-                    # new_dist = -mu + x_l + arc_entry - slack_sigma_j + entry_sigma_j
-                    terms = [neg_mu, x_l, arc_entry, neg_slack_sigma_j, entry_sigma_j]
-                    new_dist = self.G.sum(terms)
-                    
-                    # Determine sign of the new path
-                    new_sign = linear_prog.Sign.POS.value if sign_sigma_j == arc_sign.value else linear_prog.Sign.NEG.value
-                    
-                    # Check if this is a better path
-                    current_dual_slack = simplet_inst.dual_slacks[arc_var_index]
-                    better = False
-                    if current_dual_slack is None:
-                        better = True
-                    else:
-                        current_sign, current_entry = current_dual_slack
-                        cmp = self.G.compare(current_entry, new_dist)
-                        if cmp == -1:  # current < new_dist
-                            better = True
-                    
-                    if better:
-                        simplet_inst.dual_slacks[arc_var_index] = (new_sign, new_dist)
-        
-        # Rescale reduced costs
-        for i in range(nb_ineq):
-            arg_slack_i = simplet_inst.arg_slacks[i]
-            if not arg_slack_i:
-                continue
-                
-            var_slack, entry_slack = arg_slack_i[0]
-            slack_i = simplet_inst.lp.compute_entry_plus_var(entry_slack, var_slack, simplet_inst.point)
-            
-            z_i = simplet_inst.reduced_costs[i]
-            if z_i is not None:
-                sign, value = z_i
-                neg_slack_i = self.G.neg(slack_i)
-                rescaled_red_cost = self.G.add(value, neg_slack_i)
-                simplet_inst.reduced_costs[i] = (sign, rescaled_red_cost)
-    
-    def _compute_objective_value(self, simplet_inst: "Simplet.SimpletInstance") -> Any:
-        """
-        Compute the value of the objective function at the current point.
-        mu = max(0, c_1+x_1, ..., c_n+x_n)
-        """
-        # Initialize with zero (constant term)
-        mu = self.G.zero()
-        
-        # Compute the maximum over the objective function terms
-        objective_terms = simplet_inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None))
-        for col_index, sign, entry in objective_terms:
-            if sign == linear_prog.Sign.POS:
-                term_value = simplet_inst.lp.compute_entry_plus_var(entry, col_index, simplet_inst.point)
-                mu = self.G.max(mu, term_value)
-        
-        return mu
-    
-    def _initialize_dual_slacks_from_objective(self, simplet_inst: "Simplet.SimpletInstance", neg_mu: Any) -> None:
-        """
-        Initialize distances from the objective to variable nodes.
-        """
-        objective_terms = simplet_inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None))
-        
-        for col_index, sign, entry in objective_terms:
-            if col_index[0] == linear_prog.ColKind.VAR:
-                j = col_index[1]
-                if j is not None:
-                    # Compute the scaled distance
-                    scaled_entry = self.G.add(neg_mu, entry)
-                    simplet_inst.dual_slacks[j] = (sign.value, scaled_entry)
-    
-    def _compute_max_permutation(self, simplet_inst: "Simplet.SimpletInstance") -> None:
-        """
-        Compute the maximizing permutation sigma : [n] -> I in the tropical permanent of A_I.
-        Corresponds to compute_max_permutation in the original OCaml.
-        
-        Uses DFS in the tangent digraph to determine the optimal permutation.
-        """
-        dim = simplet_inst.lp.dim()
-        simplet_inst.max_permutation = [None for _ in range(dim)]
-        
-        if simplet_inst.tangent_digraph is not None:
-            # Implement DFS in the tangent digraph
-            def compute_sigma(acc, node):
-                node_type, node_value = node
-                if node_type == "IneqNode":
-                    ineq_index = int(node_value) if isinstance(node_value, int) else None
-                    if ineq_index is not None:
-                        # Get all variables connected to this inequality node
-                        if simplet_inst.tangent_digraph is not None:
-                            ineq_node = simplet_inst.tangent_digraph.get_ineq_node(ineq_index)
-                            # In a hyperplan node, there should be at least one VAR with each sign
-                            # We assign this inequality to ALL connected non-affine variables
-                            # that don't have a permutation yet
-                            for var_index, sign, entry in ineq_node:
-                                if var_index[0] == linear_prog.ColKind.VAR:
-                                    j = var_index[1]
-                                    if j is not None and simplet_inst.max_permutation[j] is None:
-                                        simplet_inst.max_permutation[j] = (ineq_index, sign.value, entry)
-                return acc
-            
-            # Start DFS from the affine node
-            start_node = ("VarNode", (linear_prog.ColKind.AFFINE, None))
-            simplet_inst.tangent_digraph.dfs_fold_acyclic_graph(compute_sigma, None, start_node)
-        
-        # Verify that all variables have a permutation
-        for j in range(dim):
-            if simplet_inst.max_permutation[j] is None:
-                # Fallback if DFS didn't find a complete permutation
-                print(f"Warning: permutation for variable {j} not found")
+                    j = col_index[1]
+                    if j is not None:
+                        inst.var_in_arg_slack[j].append(i)
 
-    def _bound_on_length_by_ineq(self, simplet_inst: "Simplet.SimpletInstance", ineq_index: int) -> Optional[Any]:
-        """
-        During pivoting, compute the bound on the length of the current ordinary segment
-        given by inequality ineq_index.
-        
-        Args:
-            simplet_inst: The simplet instance.
-            ineq_index: The index of the inequality.
-            
-        Returns:
-            The bound value if applicable, None otherwise.
-            
-        Raises:
-            ValueError: If the slack of the inequality is +infinity.
-        """
-        arg_slack = simplet_inst.arg_slacks[ineq_index]
-        arg_lambda = simplet_inst.arg_lambdas[ineq_index]
-        ineq_status = simplet_inst.ineq_status[ineq_index]
-        
-        if not arg_slack:  # Empty list
-            raise ValueError(f"Error, simplet._bound_on_length_by_ineq: slack of ineq_{ineq_index} is +oo")
-        
+    def _bound_on_length_by_ineq(self, inst: "Simplet.Instance", ineq_index: int) -> Optional[Any]:
+        arg_slack = inst.arg_slacks[ineq_index]
+        arg_lambda = inst.arg_lambdas[ineq_index]
+        ineq_status = inst.ineq_status[ineq_index]
+        if not arg_slack:
+            raise ValueError("Error, slack is +oo")
         if not arg_lambda:
             return None
-            
-        var_index_slack, entry_slack = arg_slack[0]
-        var_index_lambda, sign_lambda, entry_lambda = arg_lambda[0]
-        
-        if ineq_status in [IneqStatus.BASIS, IneqStatus.INACTIVE]:
+        (var_slack, entry_slack) = arg_slack[0]
+        (var_lambda, sign_lambda, entry_lambda) = arg_lambda[0]
+        if ineq_status in ("Basis", "Inactive"):
             return None
-        elif ineq_status == IneqStatus.ENT_HYP and sign_lambda == linear_prog.Sign.POS.value:
+        if ineq_status == "EntHyp" and sign_lambda == linear_prog.Sign.POS.value:
             return None
-        elif ineq_status == IneqStatus.BREAK_HYP or (ineq_status == IneqStatus.ENT_HYP and sign_lambda == linear_prog.Sign.NEG.value):
-            # Compute the actual bound: entry_slack - entry_lambda
-            # This represents the maximum segment length before the inequality changes status
-            bound = self.G.substract(entry_slack, entry_lambda)
-            return bound
-        
-        return None
+        slack_val = inst.lp.compute_entry_plus_var(entry_slack, var_slack, inst.point)
+        lambda_val = inst.lp.compute_entry_plus_var(entry_lambda, var_lambda, inst.point)
+        return self.G.substract(slack_val, lambda_val)
 
-    def bland_rule(self, inst: "Simplet.SimpletInstance") -> Optional[int]:
-        """
-        Find the first inequality with negative reduced cost for minimization problems.
-        Implements Bland's rule to avoid cycling.
-        
-        This rule is appropriate when solving tropical LP minimization problems
-        (e.g., min-plus semiring with minimize objective, or max-plus semiring with maximize objective).
-        
-        Args:
-            inst: The simplet instance.
-            
-        Returns:
-            Index of the first inequality with negative reduced cost, or None if optimal.
-        """
-        nb_ineq = inst.lp.nb_ineq()
-        
-        for i in range(nb_ineq):
-            # Check if inequality is in the basis using ineq_status (not tangent digraph)
-            # This is critical for degenerate pivots where tangent digraph doesn't change
-            if inst.ineq_status[i] != IneqStatus.BASIS:
-                continue
-                
-            red_cost = inst.reduced_costs[i]
-            if red_cost is not None and red_cost[0] == linear_prog.Sign.NEG.value:
-                return i
-        
-        return None
-    
-    def bland_rule_maximize(self, inst: "Simplet.SimpletInstance") -> Optional[int]:
-        """
-        Find the first inequality with positive reduced cost for maximization problems.
-        Implements Bland's rule to avoid cycling.
-        
-        This rule is appropriate when solving tropical LP maximization problems
-        (e.g., min-plus semiring with maximize objective, or max-plus semiring with minimize objective).
-        The sign convention is reversed compared to minimization.
-        
-        Args:
-            inst: The simplet instance.
-            
-        Returns:
-            Index of the first inequality with positive reduced cost, or None if optimal.
-        """
-        nb_ineq = inst.lp.nb_ineq()
-        
-        for i in range(nb_ineq):
-            # Check if inequality is in the basis using ineq_status (not tangent digraph)
-            # This is critical for degenerate pivots where tangent digraph doesn't change
-            if inst.ineq_status[i] != IneqStatus.BASIS:
-                continue
-                
-            red_cost = inst.reduced_costs[i]
-            # For maximization, positive reduced cost indicates improvement potential
-            if red_cost is not None and red_cost[0] == linear_prog.Sign.POS.value:
-                return i
-        
-        return None
+    def _compute_direction_and_break_hyp(self, inst: "Simplet.Instance", incoming_var_index: linear_prog.ColIndex) -> None:
+        def visit(acc: List[linear_prog.ColIndex], node):
+            node_type, node_val = node
+            if node_type == "IneqNode":
+                i = node_val
+                if inst.ineq_status[i] != "BreakHyp":
+                    raise ValueError("expected BreakHyp while initializing direction")
+                inst.ineq_status[i] = "Basis"
+                return acc
+            else:  # VarNode
+                acc.append(node_val)
+                return acc
+        direction = inst.tangent_digraph.dfs_fold_acyclic_graph(visit, [], ("VarNode", incoming_var_index))
+        inst.direction = direction
 
-    def get_pivot_rule_for_objective(self, maximize: bool = False) -> Callable[["Simplet.SimpletInstance"], Optional[int]]:
-        """
-        Return the appropriate pivot rule based on the optimization direction.
-        
-        This method allows solving hybrid problems where the semiring and objective direction
-        may not match the standard convention (e.g., min-plus with maximize, or max-plus with minimize).
-        
-        Args:
-            maximize: If True, return the pivot rule for maximization objectives.
-                     If False (default), return the pivot rule for minimization objectives.
-                     
-        Returns:
-            The appropriate pivot rule function (bland_rule or bland_rule_maximize).
-            
-        Examples:
-            Standard cases:
-            - min-plus semiring + minimize objective: get_pivot_rule_for_objective(maximize=False)
-            - max-plus semiring + maximize objective: get_pivot_rule_for_objective(maximize=False)
-            
-            Hybrid cases:
-            - min-plus semiring + maximize objective: get_pivot_rule_for_objective(maximize=True)
-            - max-plus semiring + minimize objective: get_pivot_rule_for_objective(maximize=True)
-        """
-        if maximize:
-            return self.bland_rule_maximize
-        else:
-            return self.bland_rule
-
-    def basis_contains(self, inst: "Simplet.SimpletInstance", ineq_index: int) -> bool:
-        """
-        Check if inequality ineq_index is saturated by the current basic point.
-        
-        Args:
-            inst: The simplet instance.
-            ineq_index: The index of the inequality to check.
-            
-        Returns:
-            True if the inequality is in the basis, False otherwise.
-        """
-        if inst.tangent_digraph is not None:
-            return inst.tangent_digraph.is_hyp_node(ineq_index)
-        else:
-            # Fallback to ineq_status if TangentDigraph is not available
-            return inst.ineq_status[ineq_index] == IneqStatus.BASIS
-
-    def pivot(self, inst: "Simplet.SimpletInstance", i_out: int) -> None:
-        """
-        Perform tropical pivoting from the current basic point along the edge defined by I \\ {i_out}.
-        This is the implementation of the core of the tropical simplex algorithm.
-        
-        The complete algorithm includes:
-        1. Initialize inequality status
-        2. Remove hyp node from tangent digraph  
-        3. Compute direction and break hyp
-        4. Traverse the tropical edge through ordinary segments
-        5. Update data structures
-        
-        Args:
-            inst: The simplet instance.
-            i_out: Index of the inequality leaving the basis.
-            
-        Raises:
-            ValueError: If i_out is not in the basis or tangent digraph is not initialized.
-        """
-        nb_ineq = inst.lp.nb_ineq()
-        
-        # Verify that i_out belongs to the basis
-        if not self.basis_contains(inst, i_out):
-            raise ValueError("Simplet.pivot: the input index does not belong to the basis")
-        
-        if inst.tangent_digraph is None:
-            raise ValueError("Simplet.pivot: tangent digraph not initialized")
-        
-        # 1. Initialize ineq_status based on the tangent digraph
-        for i in range(nb_ineq):
-            if inst.tangent_digraph.is_hyp_node(i):
-                inst.ineq_status[i] = IneqStatus.BREAK_HYP
+    def _deactivate_ent_hyp_touching_direction(self, inst: "Simplet.Instance") -> None:
+        for var_index in inst.direction:
+            kind, j = var_index
+            if kind == linear_prog.ColKind.AFFINE:
+                candidates = inst.affine_var_in_arg_slack
             else:
-                inst.ineq_status[i] = IneqStatus.ENT_HYP
-        
-        # 2. Mark hyp node as leaving the basis (permanently remove it to prevent cycling)
-        inst.ineq_status[i_out] = IneqStatus.INACTIVE
-        
-        # 3. Find the unique incoming arc to hyp node i_out
-        incoming_arc = self._find_incoming_arc(inst, i_out)
-        if incoming_arc is None:
-            raise ValueError(f"Simplet.pivot: no incoming arc found for hyp node {i_out}")
-        
-        incoming_var_index, incoming_sign, incoming_entry = incoming_arc
-        
-        # 4. Remove hyp node i_out from tangent digraph
-        inst.tangent_digraph.remove_arcs_of_node(("IneqNode", i_out))
-        
-        # 5. Compute break hyp and direction
-        self._compute_direction_and_break_hyp(inst, incoming_var_index)
-        
-        # 6. Compute ent hyp and arg_lambda  
-        self._compute_arg_lambdas(inst)
-        
-        # 7. Traverse the tropical edge
-        # Note: If direction is empty (affine incoming arc), point won't change but basis will
-        new_point = self._traverse_tropical_edge(inst, incoming_var_index, incoming_entry)
-        
-        # 8. Update data structures
-        inst.point = new_point
-        inst.iteration += 1
-        
-        # Rebuild tangent digraph from the new point
-        inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(inst.lp, new_point)
-        
-        # Update ineq_status based on the new tangent digraph
-        # CRITICAL: Don't re-add the inequality that just left the basis (i_out)
-        # This prevents cycling when point doesn't change (degenerate pivot)
-        for i in range(nb_ineq):
-            if i == i_out:
-                # Keep it INACTIVE - it left the basis and should not return
-                inst.ineq_status[i] = IneqStatus.INACTIVE
-            elif inst.tangent_digraph.is_hyp_node(i):
-                inst.ineq_status[i] = IneqStatus.BASIS
+                candidates = inst.var_in_arg_slack[j]
+            for i in candidates:
+                if inst.ineq_status[i] == "EntHyp":
+                    inst.ineq_status[i] = "Inactive"
+
+    def _compute_arg_lambdas(self, inst: "Simplet.Instance") -> None:
+        nb_ineq = inst.lp.nb_ineq()
+        inst.arg_lambdas = [[] for _ in range(nb_ineq)]
+        for var_index in inst.direction:
+            for row_index, sign, entry in inst.lp.get_col(var_index):
+                if row_index[0] != linear_prog.RowKind.INEQ:
+                    continue
+                ineq_idx = row_index[1]
+                old_arg = inst.arg_lambdas[ineq_idx]
+                val = inst.lp.compute_entry_plus_var(entry, var_index, inst.point)
+                if not old_arg:
+                    inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)]
+                else:
+                    old_var, old_sign, old_entry = old_arg[0]
+                    old_val = inst.lp.compute_entry_plus_var(old_entry, old_var, inst.point)
+                    cmp = self.G.compare(val, old_val)
+                    if cmp == 0:
+                        inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)] + old_arg
+                    elif cmp == 1:
+                        inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)]
+
+    def _traverse_break_hyp(self, inst: "Simplet.Instance", break_index: int) -> None:
+        arg_lambda = inst.arg_lambdas[break_index]
+        if len(arg_lambda) != 1:
+            raise ValueError("arg_lambda at breakHyp must be singleton")
+        new_var, new_sign, new_entry = arg_lambda[0]
+        ineq_node = inst.tangent_digraph.get_ineq_node(break_index)
+        same_oriented = [arc for arc in ineq_node if arc[1].value == new_sign]
+        if len(same_oriented) != 1:
+            raise ValueError("breakHyp node degree error")
+        old_var = same_oriented[0][0]
+        inst.tangent_digraph.remove_arc(old_var, break_index)
+
+        # DFS from break hyp to collect new direction vars and flip BreakHyp->Basis
+        def upd(acc, node):
+            ntype, nval = node
+            if ntype == "IneqNode":
+                i = nval
+                if inst.ineq_status[i] != "BreakHyp":
+                    raise ValueError("expected BreakHyp while traversing")
+                inst.ineq_status[i] = "Basis"
+                return acc
             else:
-                inst.ineq_status[i] = IneqStatus.INACTIVE
+                acc.append(nval)
+                return acc
+        new_dir_vars = inst.tangent_digraph.dfs_fold_acyclic_graph(upd, [], ("IneqNode", break_index))
+        inst.direction = new_dir_vars + inst.direction
+
+        # deactivate ent hyp touched by new_dir_vars
+        for var_index in new_dir_vars:
+            kind, j = var_index
+            if kind == linear_prog.ColKind.AFFINE:
+                candidates = inst.affine_var_in_arg_slack
+            else:
+                candidates = inst.var_in_arg_slack[j]
+            for i in candidates:
+                if inst.ineq_status[i] == "EntHyp":
+                    inst.ineq_status[i] = "Inactive"
+
+        inst.tangent_digraph.add_arc(new_var, break_index, linear_prog.Sign(new_sign), new_entry)
+
+        # update arg_lambda for rows touched by new_dir_vars
+        for var_index in new_dir_vars:
+            for row_index, sign, entry in inst.lp.get_col(var_index):
+                if row_index[0] != linear_prog.RowKind.INEQ:
+                    continue
+                ineq_idx = row_index[1]
+                old_arg = inst.arg_lambdas[ineq_idx]
+                val = inst.lp.compute_entry_plus_var(entry, var_index, inst.point)
+                if not old_arg:
+                    inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)]
+                else:
+                    old_var, old_sign, old_entry = old_arg[0]
+                    old_val = inst.lp.compute_entry_plus_var(old_entry, old_var, inst.point)
+                    cmp = self.G.compare(val, old_val)
+                    if cmp == 0:
+                        inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)] + old_arg
+                    elif cmp == 1:
+                        inst.arg_lambdas[ineq_idx] = [(var_index, sign.value, entry)]
+
+    def _traverse_ordinary_segment(self, inst: "Simplet.Instance") -> Optional[int]:
+        nb_ineq = inst.lp.nb_ineq()
+        dim = inst.lp.dim()
+
+        length = None
+        arg_len: List[int] = []
+        for i in range(nb_ineq):
+            bound_i = self._bound_on_length_by_ineq(inst, i)
+            if bound_i is None:
+                continue
+            if length is None:
+                length = bound_i
+                arg_len = [i]
+            else:
+                cmp = self.G.compare(bound_i, length)
+                if cmp == 1:
+                    continue
+                if cmp == 0:
+                    arg_len.append(i)
+                else:  # smaller
+                    length = bound_i
+                    arg_len = [i]
+        if length is None or len(arg_len) != 1:
+            raise ValueError("unbounded or ambiguous ordinary segment")
+        length_ineq = arg_len[0]
+
+        # update point
+        has_affine = any(k == linear_prog.ColKind.AFFINE for k, _ in inst.direction)
+        if has_affine:
+            for j in range(dim):
+                inst.point[j] = self.G.substract(inst.point[j], length)
+        for var_index in inst.direction:
+            kind, j = var_index
+            if kind == linear_prog.ColKind.VAR and j is not None:
+                inst.point[j] = self.G.add(inst.point[j], length)
+
+        status = inst.ineq_status[length_ineq]
+        if status == "BreakHyp":
+            self._traverse_break_hyp(inst, length_ineq)
+            return None
+        if status == "EntHyp":
+            return length_ineq
+        raise ValueError("unexpected status on length-defining inequality")
+
+    def _compute_max_permutation(self, inst: "Simplet.Instance") -> None:
+        dim = inst.lp.dim()
+        inst.max_permutation = [None for _ in range(dim)]
+
+        def visit(acc, node):
+            ntype, nval = node
+            if ntype == "IneqNode":
+                i = nval
+                ineq_node = inst.tangent_digraph.get_ineq_node(i)
+                # choose the unique Var neighbor not yet in permutation
+                vars_here = [(var, sign, entry) for var, sign, entry in ineq_node if var[0] == linear_prog.ColKind.VAR]
+                if len(vars_here) != 1 and len(vars_here) != 2:
+                    raise ValueError("bad degree for hyp node")
+                chosen = None
+                for var_index, sign, entry in vars_here:
+                    j = var_index[1]
+                    if j is not None and inst.max_permutation[j] is None:
+                        chosen = (j, sign, entry)
+                        break
+                if chosen is None:
+                    return acc
+                j, sign, entry = chosen
+                inst.max_permutation[j] = (i, sign.value, entry)
+            return acc
+
+        inst.tangent_digraph.dfs_fold_acyclic_graph(visit, None, ("VarNode", (linear_prog.ColKind.AFFINE, None)))
+        for j, sigma_j in enumerate(inst.max_permutation):
+            if sigma_j is None:
+                raise ValueError(f"sigma({j}) not defined")
+
+    def _compute_reduced_costs(self, inst: "Simplet.Instance") -> None:
+        nb_ineq = inst.lp.nb_ineq()
+        dim = inst.lp.dim()
+        # Ensure slack arg sets are available before computing costs
+        if not any(inst.arg_slacks):
+            self._compute_arg_slacks_pos(inst)
+        self._compute_max_permutation(inst)
+        inst.reduced_costs = [None for _ in range(nb_ineq)]
+        inst.dual_slacks = [None for _ in range(dim)]
+        inst.var_seen = [False for _ in range(dim)]
+
+        # mu = max(0, c_j + x_j)
+        mu = self.G.zero()
+        for var_index, sign, entry in inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None)):
+            if var_index[0] == linear_prog.ColKind.AFFINE:
+                continue
+            val = inst.lp.compute_entry_plus_var(entry, var_index, inst.point)
+            mu = self.G.max(mu, val)
+        neg_mu = self.G.neg(mu)
+
+        # init distances objective->var
+        for var_index, sign, entry in inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None)):
+            if var_index[0] != linear_prog.ColKind.VAR:
+                continue
+            j = var_index[1]
+            x_j = inst.point[j]
+            scaled = self.G.sum([neg_mu, x_j, entry])
+            inst.dual_slacks[j] = (sign.value, scaled)
+
+        def find_max_unseen():
+            best_j = None
+            best_val = None
+            for j in range(dim):
+                if inst.var_seen[j]:
+                    continue
+                val = inst.dual_slacks[j]
+                if val is None:
+                    continue
+                if best_val is None or self.G.compare(val[1], best_val[1]) == 1:
+                    best_j = j
+                    best_val = val
+            return best_j
+
+        finished = False
+        while not finished:
+            j = find_max_unseen()
+            if j is None:
+                finished = True
+                break
+            inst.var_seen[j] = True
+            sigma_j, sigma_sign, sigma_entry = inst.max_permutation[j]
+            j_sign, j_entry = inst.dual_slacks[j]
+            slack_sigma = inst.lp.compute_entry_plus_var(inst.arg_slacks[sigma_j][0][1], inst.arg_slacks[sigma_j][0][0], inst.point)
+            entry_sigma = self.G.add(j_entry, mu)
+            sign_sigma = "Pos" if (j_sign == sigma_sign) else "Neg"
+            inst.reduced_costs[sigma_j] = (sign_sigma, entry_sigma)
+            for arc_index, arc_sign, arc_entry in inst.lp.get_row((linear_prog.RowKind.INEQ, sigma_j)):
+                if arc_index[0] != linear_prog.ColKind.VAR:
+                    continue
+                l = arc_index[1]
+                if inst.var_seen[l]:
+                    continue
+                x_l = inst.point[l]
+                new_dist = self.G.sum([neg_mu, x_l, arc_entry, self.G.neg(slack_sigma), entry_sigma])
+                new_sign = "Pos" if (sign_sigma != arc_sign.value) else "Neg"
+                better = False
+                current = inst.dual_slacks[l]
+                if current is None:
+                    better = True
+                else:
+                    _, cur_val = current
+                    if self.G.compare(new_dist, cur_val) == -1:
+                        better = True
+                if better:
+                    inst.dual_slacks[l] = (new_sign, new_dist)
+
+        # rescale reduced costs
+        for i in range(nb_ineq):
+            slack_i = inst.lp.compute_entry_plus_var(inst.arg_slacks[i][0][1], inst.arg_slacks[i][0][0], inst.point)
+            z_i = inst.reduced_costs[i]
+            if z_i is None:
+                continue
+            sign, value = z_i
+            inst.reduced_costs[i] = (sign, self.G.add(value, self.G.neg(slack_i)))
+
+
+    def init(self, lp: linear_prog.LP, basic_point: np.ndarray) -> "Simplet.Instance":
+        tg = tangent_digraph.TangentDigraph.compute(lp, basic_point)
+
+        if not tg.is_basic_point():
+            raise ValueError("input point is not a basic point")
+        if not lp.is_point_feasible(basic_point, allow_all_neg=True):
+            raise ValueError("input point is not feasible")
         
-        # Recompute data structures after pivot
+        inst = Simplet.Instance(lp, basic_point)
+        inst.tangent_digraph = tg
+        nb_ineq = lp.nb_ineq()
+
+        for i in range(nb_ineq):
+            if tg.is_hyp_node(i):
+                inst.ineq_status[i] = "Basis"
         self._compute_arg_slacks_pos(inst)
         self._compute_reduced_costs(inst)
 
-    def _find_incoming_arc(self, inst: "Simplet.SimpletInstance", i_out: int) -> Optional[Tuple[linear_prog.ColIndex, linear_prog.Sign, Any]]:
-        """
-        Find the unique incoming arc to hyp node i_out.
-        A hyp node has exactly one incoming arc (POS) and one outgoing arc (NEG).
-        
-        Args:
-            inst: The simplet instance.
-            i_out: Index of the hyp node.
-            
-        Returns:
-            Tuple of (var_index, sign, entry) for the incoming arc, or None if not found.
-        """
-        if inst.tangent_digraph is None:
-            return None
-            
-        ineq_node_arcs = inst.tangent_digraph.get_ineq_node(i_out)
-        
-        # Search for the incoming arc (positive sign)
-        for var_index, sign, entry in ineq_node_arcs:
-            if sign == linear_prog.Sign.POS:
-                return (var_index, sign, entry)
-        
-        return None
+        return inst
 
-    def _compute_direction_and_break_hyp(self, inst: "Simplet.SimpletInstance", incoming_var_index: linear_prog.ColIndex) -> None:
-        """
-        Compute the direction of movement and identify break_hyp inequalities.
-        The direction is determined by the incoming arc of the node leaving the basis.
-        
-        Args:
-            inst: The simplet instance.
-            incoming_var_index: Index of the variable of the incoming arc.
-        """
-        # The direction is given by the variable of the incoming arc
-        if incoming_var_index[0] == linear_prog.ColKind.VAR:
-            j = incoming_var_index[1]
-            if j is not None:
-                inst.direction = [j]  # Direction along variable j
-        else:
-            # If the incoming arc is from the affine variable, empty direction
-            inst.direction = []
+    def basis_contains(self, inst: "Simplet.Instance", ineq_index: int) -> bool:
+        return inst.tangent_digraph.is_hyp_node(ineq_index)
 
-    def _compute_arg_lambdas(self, inst: "Simplet.SimpletInstance") -> None:
-        """
-        Compute arg_lambda for each inequality during pivoting.
-        arg_lambda[i] = argmax_{j in direction} (|W_ij| + x_j)
-        
-        Args:
-            inst: The simplet instance.
-        """
-        nb_ineq = inst.lp.nb_ineq()
-        
-        # Reset arg_lambdas
-        inst.arg_lambdas = [[] for _ in range(nb_ineq)]
-        
-        for i in range(nb_ineq):
-            # For each inequality, compute the argmax over the direction
-            if inst.direction:
-                # If there's a defined direction
-                max_val = None
-                best_args = []
-                
-                for j in inst.direction:
-                    # Find the coefficient W_ij for variable j in inequality i
-                    row_i = inst.lp.get_row((linear_prog.RowKind.INEQ, i))
-                    for col_index, sign, entry in row_i:
-                        if col_index[0] == linear_prog.ColKind.VAR and col_index[1] == j:
-                            # Compute |W_ij| + x_j
-                            val = inst.lp.compute_entry_plus_var(entry, col_index, inst.point)
-                            
-                            if max_val is None or self.G.compare(val, max_val) > 0:
-                                max_val = val
-                                best_args = [(col_index, sign.value, entry)]
-                            elif max_val is not None and self.G.compare(val, max_val) == 0:
-                                best_args.append((col_index, sign.value, entry))
-                
-                inst.arg_lambdas[i] = best_args
-            else:
-                # No direction, empty arg_lambda
-                inst.arg_lambdas[i] = []
+    def red_cost(self, inst: "Simplet.Instance", i: int):
+        return inst.reduced_costs[i]
 
-    def _traverse_tropical_edge(self, inst: "Simplet.SimpletInstance", incoming_var_index: linear_prog.ColIndex, incoming_entry: Any) -> np.ndarray:
-        """
-        Traverse the tropical edge to the new basic point.
-        This is the core of the algorithm: move along the direction until a new inequality becomes active.
-        
-        Args:
-            inst: The simplet instance.
-            incoming_var_index: Index of the incoming variable.
-            incoming_entry: Entry value of the incoming arc.
-            
-        Returns:
-            The new basic point after traversing the edge.
-        """
-        current_point = inst.point.copy()
-        
-        # If the direction is empty (movement along affine variable), the point doesn't change
-        if not inst.direction:
-            return current_point
-        
-        # Compute the maximum lambda for which we remain feasible
-        lambda_max = None
-        
-        for i in range(inst.lp.nb_ineq()):
-            if inst.ineq_status[i] in [IneqStatus.ENT_HYP, IneqStatus.BREAK_HYP]:
-                bound = self._bound_on_length_by_ineq(inst, i)
-                if bound is not None:
-                    if lambda_max is None or self.G.compare(bound, lambda_max) < 0:
-                        lambda_max = bound
-        
-        # If there's no bound, use a small default value
-        if lambda_max is None:
-            lambda_max = self.G.one  # Unit movement
-        
-        # Move the point in the computed direction
-        for j in inst.direction:
-            if j < len(current_point):
-                # x_j := x_j + lambda_max (tropical addition, which is max for max-plus, min for min-plus)
-                current_point[j] = self.G.add(current_point[j], lambda_max)
-        
-        return current_point
-
-    def solve(
-        self,
-        inst: "Simplet.SimpletInstance",
-        pivot_rule: Callable[["Simplet.SimpletInstance"], Optional[int]],
-        log: Optional[TextIO] = None,
-        max_iterations: int = 10000
-    ) -> None:
-        """
-        Solve the tropical LP by iterating pivots until optimality is reached.
-        
-        Args:
-            inst: The simplet instance.
-            pivot_rule: Function that selects which inequality should leave the basis.
-                        Returns None when optimal.
-            log: Optional output stream for logging the solving process.
-            max_iterations: Maximum number of iterations to prevent infinite loops (default: 10000).
-        
-        Raises:
-            RuntimeError: If maximum iterations reached without finding optimal solution.
-        """
-        nb_iter = 1
-        is_optimal = False
-        
-        def myprintf(outchannel, format_str, *args):
-            if outchannel is not None:
-                print(format_str % args, file=outchannel)
-        
-        while not is_optimal:
-            if nb_iter > max_iterations:
-                error_msg = f"\n*** MAXIMUM ITERATIONS REACHED ({max_iterations}) ***\n"
-                error_msg += f"The simplex algorithm may be cycling or the problem is unbounded.\n"
-                error_msg += f"Current iteration: {nb_iter}\n"
-                myprintf(log, error_msg)
-                print(error_msg)
-                raise RuntimeError(f"Simplex solver exceeded maximum iterations ({max_iterations})")
-            
-            myprintf(log, "\niteration %d", nb_iter)
-            self.print_status(inst, log)
-            
-            leaving_ineq = pivot_rule(inst)
-            
-            if leaving_ineq is None:
-                is_optimal = True
-                myprintf(log, "\nOptimal reached!")
-            else:
-                myprintf(log, "\npivoting on %d", leaving_ineq)
-                self.pivot(inst, leaving_ineq)
-                nb_iter += 1
-
-    # --- Access methods ---
-    def basic_point(self, inst: "Simplet.SimpletInstance") -> np.ndarray:
-        """
-        Return the current basic point.
-        
-        Args:
-            inst: The simplet instance.
-            
-        Returns:
-            The current basic point as a numpy array.
-        """
+    def basic_point(self, inst: "Simplet.Instance") -> np.ndarray:
         return inst.point
 
-    def red_cost(self, inst: "Simplet.SimpletInstance", i: int) -> Optional[Tuple[str, Any]]:
-        """
-        Return the reduced cost for inequality i.
-        
-        Args:
-            inst: The simplet instance.
-            i: Index of the inequality.
-            
-        Returns:
-            Tuple of (sign, value) for the reduced cost, or None if not available.
-        """
-        if 0 <= i < len(inst.reduced_costs):
-            return inst.reduced_costs[i]
+    def print_status(self, inst: "Simplet.Instance", out=None):
+        if out:
+            print("basis:", file=out)
+            for i in range(inst.lp.nb_ineq()):
+                if inst.tangent_digraph.is_hyp_node(i):
+                    print(f"{i}, ", end="", file=out)
+            print("\npoint:", file=out)
+            for j, x in enumerate(inst.point):
+                print(f"x{j}: {self.G.to_string(x)}", file=out)
+            print("reduced costs:", file=out)
+            for i, rc in enumerate(inst.reduced_costs):
+                if rc is None:
+                    s = "null"
+                else:
+                    sgn, v = rc
+                    s = f"{sgn} {self.G.to_string(v)}"
+                print(f"y{i}: {s}", file=out)
+
+    def print_reduced_costs(self, inst: "Simplet.Instance", out=None):
+        target = out or sys.stdout
+        for i, rc in enumerate(inst.reduced_costs):
+            if rc is None:
+                s = "null"
+            else:
+                sgn, v = rc
+                s = f"{sgn} {self.G.to_string(v)}"
+            print(f"y{i}: {s}", file=target)
+
+    def bland_rule(self, inst: "Simplet.Instance") -> Optional[int]:
+        for i in range(inst.lp.nb_ineq()):
+            if not inst.tangent_digraph.is_hyp_node(i):
+                continue
+            rc = inst.reduced_costs[i]
+            if rc is not None and rc[0] == linear_prog.Sign.NEG.value:
+                return i
         return None
 
-    def lp(self, inst: "Simplet.SimpletInstance") -> linear_prog.LP:
-        """
-        Return the associated linear program.
-        
-        Args:
-            inst: The simplet instance.
-            
-        Returns:
-            The LP instance.
-        """
-        return inst.lp
+    def get_pivot_rule_for_objective(self, maximize: bool = False) -> Callable[["Simplet.Instance"], Optional[int]]:
+        if maximize:
+            return self.bland_rule_maximize
+        return self.bland_rule
 
-    def tangent_digraph(self, inst: "Simplet.SimpletInstance") -> Any:
-        """
-        Return the tangent digraph at the current basic point.
-        
-        Args:
-            inst: The simplet instance.
-            
-        Returns:
-            The TangentDigraph instance.
-        """
-        return inst.tangent_digraph
+    def bland_rule_maximize(self, inst: "Simplet.Instance") -> Optional[int]:
+        for i in range(inst.lp.nb_ineq()):
+            if not inst.tangent_digraph.is_hyp_node(i):
+                continue
+            rc = inst.reduced_costs[i]
+            if rc is not None and rc[0] == linear_prog.Sign.POS.value:
+                return i
+        return None
 
-    def print_status(self, inst: "Simplet.SimpletInstance", log: Optional[TextIO] = None) -> None:
-        """
-        Print the current status of the simplet.
-        
-        Args:
-            inst: The simplet instance.
-            log: Optional output stream for printing. If None, nothing is printed.
-        """
-        if log is None:
-            return
-            
-        print(f"Simplet iteration {inst.iteration}", file=log)
-        
-        # Print the basis
-        print("Basis:", file=log)
-        basis_indices = [i for i in range(len(inst.ineq_status)) 
-                        if inst.ineq_status[i] == IneqStatus.BASIS]
-        print(f"  {basis_indices}", file=log)
-        
-        # Print the basic point
-        print("Basic point:", file=log)
-        for j, x_val in enumerate(inst.point):
-            print(f"  x{j}: {x_val}", file=log)
-        
-        # Print reduced costs
-        print("Reduced costs:", file=log)
-        for i, red_cost in enumerate(inst.reduced_costs):
-            if red_cost is None:
-                red_cost_str = "null"
+    def _find_incoming_arc(self, inst: "Simplet.Instance", i_out: int):
+        arcs = inst.tangent_digraph.get_ineq_node(i_out)
+        for var_index, sign, entry in arcs:
+            if sign == linear_prog.Sign.POS:
+                return (var_index, sign, entry)
+        return None
+
+    def pivot(self, inst: "Simplet.Instance", i_out: int) -> None:
+        if not self.basis_contains(inst, i_out):
+            raise ValueError("input index does not belong to the basis")
+        nb_ineq = inst.lp.nb_ineq()
+        for i in range(nb_ineq):
+            if inst.tangent_digraph.is_hyp_node(i):
+                inst.ineq_status[i] = "BreakHyp"
             else:
-                sign, entry = red_cost
-                red_cost_str = f"{sign} {entry}"
-            print(f"  y{i}: {red_cost_str}", file=log)
-        
-        print(file=log)  # Empty line
-        
-        if log:
-            log.flush()
+                inst.ineq_status[i] = "EntHyp"
+        inst.ineq_status[i_out] = "Inactive"
 
-    def print_reduced_costs(self, inst: "Simplet.SimpletInstance", log: TextIO) -> None:
-        """
-        Print only the reduced costs.
-        
-        Args:
-            inst: The simplet instance.
-            log: Output stream for printing.
-        """
-        print("Reduced costs:", file=log)
-        for i, red_cost in enumerate(inst.reduced_costs):
-            if red_cost is None:
-                red_cost_str = "null"
-            else:
-                sign, entry = red_cost
-                red_cost_str = f"{sign} {entry}"
-            print(f"y{i}: {red_cost_str}", file=log)
-        
-        if log:
-            log.flush()
+        incoming = self._find_incoming_arc(inst, i_out)
+        if incoming is None:
+            raise ValueError("no incoming arc found")
+        incoming_var_index, _, incoming_entry = incoming
+
+        inst.tangent_digraph.remove_arcs_of_node(("IneqNode", i_out))
+
+        self._compute_direction_and_break_hyp(inst, incoming_var_index)
+        self._deactivate_ent_hyp_touching_direction(inst)
+        self._compute_arg_lambdas(inst)
+
+        # traverse tropical edge
+        visited = 0
+        while True:
+            if visited > inst.lp.dim():
+                raise ValueError("visited more ordinary segments than dimension")
+            visited += 1
+            i_ent = self._traverse_ordinary_segment(inst)
+            print(f"Traversed ordinary segment, i_ent: {i_ent}, direction: {inst.direction}, visited: {visited}")
+            if i_ent is None:
+                continue
+            arg_lambda = inst.arg_lambdas[i_ent]
+            if len(arg_lambda) != 1 or arg_lambda[0][1] != linear_prog.Sign.NEG.value:
+                raise ValueError("arg_lambda at new basic point must be singleton with Neg")
+            # Entering inequality should receive its arcs at the new basic point
+            out_var, out_sign, out_entry = arg_lambda[0]
+            inst.tangent_digraph.add_arc(out_var, i_ent, linear_prog.Sign.NEG, out_entry)
+            arg_slack = inst.arg_slacks[i_ent]
+            if len(arg_slack) != 1:
+                raise ValueError("arg_slack at new basic point must be singleton")
+            in_var, in_entry = arg_slack[0]
+            inst.tangent_digraph.add_arc(in_var, i_ent, linear_prog.Sign.POS, in_entry)
+            break
+
+        # rebuild data
+        inst.arg_slacks = [[] for _ in range(nb_ineq)]
+        self._compute_arg_slacks_pos(inst)
+        self._compute_reduced_costs(inst)
+
+    def solve(self, inst: "Simplet.Instance", pivot_rule: Callable[["Simplet.Instance"], Optional[int]], out=None, max_iterations: int = 10000) -> None:
+        it = 1
+        while True:
+            if it > max_iterations:
+                raise RuntimeError("maximum iterations reached")
+            if out:
+                print(f"\niteration {it}", file=out)
+                self.print_status(inst, out)
+            leaving = pivot_rule(inst)
+            print(f"Leaving index: {leaving}")
+            if leaving is None:
+                break
+            self.pivot(inst, leaving)
+            it += 1
+
+
+# Convenience alias to match existing code import pattern
+SimpletOcaml = Simplet

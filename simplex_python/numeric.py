@@ -157,6 +157,9 @@ class TropicalNumericMinPlus(NumericBase):
         return -x
 
     def mul(self, x, y):
+        # Safe add to avoid NaN from inf + (-inf)
+        if (np.isposinf(x) and np.isneginf(y)) or (np.isposinf(y) and np.isneginf(x)):
+            return np.inf
         return np.add(x, y)
 
     def div(self, x, y):
@@ -247,6 +250,8 @@ class TropicalNumericMaxPlus(NumericBase):
         return -x
 
     def mul(self, x, y):
+        if (np.isposinf(x) and np.isneginf(y)) or (np.isposinf(y) and np.isneginf(x)):
+            return np.inf
         return np.add(x, y)
 
     def div(self, x, y):

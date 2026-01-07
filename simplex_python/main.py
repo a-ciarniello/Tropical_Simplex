@@ -5,8 +5,8 @@ import sys
 import os
 from datetime import datetime
 from enum import Enum
-import numeric, group, linear_prog, parser
 from simplet import Simplet
+import numeric, group, linear_prog, parser
 from typing import Optional, List, Tuple, TextIO
 from perturbed_lp import PerturbedLP
 
@@ -145,6 +145,10 @@ def run_main(input_filename: str,
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
+
+            print(f"phaseI optimal basic point: \n {phaseI_opt_basic_point}")
+            print(f"feasibility from phaseI: {feasible}")
+
 
             if not feasible:
                 return (Solution.INFEASIBLE, np.array([]))

@@ -82,7 +82,7 @@ class TestSimplet(unittest.TestCase):
         simp = Simplet(self.LPmod)
         try:
             instance = simp.init(self.lp, self.point)
-            self.assertIsInstance(instance, Simplet.SimpletInstance)
+            self.assertIsInstance(instance, Simplet.Instance)
             self.assertEqual(len(instance.lp.ineqs), 3)
             self.assertTrue(hasattr(instance, "tangent_digraph"))
         except ValueError as e:
@@ -93,12 +93,12 @@ class TestSimplet(unittest.TestCase):
                           f"Error message should mention point/punto: {e}")
 
     def test_simplet_instance_fields(self):
-        """Verify that SimpletInstance has all main attributes"""
+        """Verify that Instance has all main attributes"""
         simp = Simplet(self.LPmod)
         try:
             inst = simp.init(self.lp, self.point)
         except ValueError:
-            inst = Simplet.SimpletInstance(self.lp, self.point)
+            inst = Simplet.Instance(self.lp, self.point)
 
         attrs = [
             "lp", "point", "tangent_digraph", "arg_slacks",
@@ -110,7 +110,7 @@ class TestSimplet(unittest.TestCase):
     def test_compute_arg_slacks_pos(self):
         """Verify arg_slacks_pos computation"""
         simp = Simplet(self.LPmod)
-        inst = Simplet.SimpletInstance(self.lp, self.point)
+        inst = Simplet.Instance(self.lp, self.point)
         simp._compute_arg_slacks_pos(inst)
         self.assertIsInstance(inst.arg_slacks, list)
         self.assertEqual(len(inst.arg_slacks), self.lp.nb_ineq())
@@ -118,7 +118,7 @@ class TestSimplet(unittest.TestCase):
     def test_compute_reduced_costs(self):
         """Verify reduced costs computation"""
         simp = Simplet(self.LPmod)
-        inst = Simplet.SimpletInstance(self.lp, self.point)
+        inst = Simplet.Instance(self.lp, self.point)
         inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(self.lp, self.point)
         simp._compute_reduced_costs(inst)
         self.assertTrue(isinstance(inst.reduced_costs, list))
@@ -127,7 +127,7 @@ class TestSimplet(unittest.TestCase):
     def test_compute_max_permutation(self):
         """Verify maximizing permutation computation"""
         simp = Simplet(self.LPmod)
-        inst = Simplet.SimpletInstance(self.lp, self.point)
+        inst = Simplet.Instance(self.lp, self.point)
         inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(self.lp, self.point)
         simp._compute_max_permutation(inst)
         self.assertEqual(len(inst.max_permutation), self.lp.dim())
@@ -135,7 +135,7 @@ class TestSimplet(unittest.TestCase):
     def test_bland_rule_and_basis_contains(self):
         """Verify bland_rule and basis_contains"""
         simp = Simplet(self.LPmod)
-        inst = Simplet.SimpletInstance(self.lp, self.point)
+        inst = Simplet.Instance(self.lp, self.point)
         inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(self.lp, self.point)
         simp._compute_reduced_costs(inst)
         result = simp.bland_rule(inst)
@@ -148,7 +148,7 @@ class TestSimplet(unittest.TestCase):
         """Verify status and reduced costs printing"""
 
         simp = Simplet(self.LPmod)
-        inst = Simplet.SimpletInstance(self.lp, self.point)
+        inst = Simplet.Instance(self.lp, self.point)
         # Must create tangent digraph before computing reduced costs
         inst.tangent_digraph = tangent_digraph.TangentDigraph.compute(self.lp, self.point)
         simp._compute_arg_slacks_pos(inst)
