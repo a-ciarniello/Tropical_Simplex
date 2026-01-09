@@ -178,16 +178,13 @@ def parse_basic_point_line(line: str) -> List[float]:
 
 
 def map_numeric_to_module_name(numeric_type: str, semiring: Optional[str]) -> str:
-    """
-    Semiring has priority: if semiring is minplus/maxplus, force the tropical backend
-    regardless of the `numeric:` header (to mirror the OCaml solver). Otherwise, use
-    the explicit numeric mapping.
-    """
-    if semiring == "minplus":
-        return "tropical_min_plus"
-    if semiring == "maxplus":
-        return "tropical_max_plus"
+    """Translate the `numeric:` header into a concrete backend name.
 
+    The OCaml solver always instantiates `Numeric` from the header, so we match that
+    behavior instead of overriding it when a semiring is provided. Users who really
+    want the tropical arithmetic backend can still specify
+    `numeric: tropical_min_plus` or `numeric: tropical_max_plus` explicitly.
+    """
     numeric_lc = numeric_type.strip().lower()
     mapping = {
         "int": "ocaml_int",
@@ -257,7 +254,7 @@ def parse_inequality_line(line: str, var_names: Dict[str, int], semiring: str) -
     return result
 
 
-def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[float], bool]:
+def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, Any, List[float], bool]:
     lines = content.strip().split('\n')
 
     state = "header"
@@ -309,7 +306,7 @@ def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[float], 
 
     numeric_name = map_numeric_to_module_name(numeric_type, semiring)
 
-    return numeric_name, var_names, objective, ineqs, basic_point, is_maximize
+    return numeric_name, var_names, semiring, objective, ineqs, basic_point, is_maximize
 
 
 class Parser:
@@ -319,7 +316,7 @@ class Parser:
         self.Num = Num
 
     def main(self, content: str) -> Tuple[Any, Any, np.ndarray, bool]:
-        numeric_name, var_names, objective, ineqs, basic_point, is_maximize = parse_lp(content)
+        numeric_name, var_names, semiring, objective, ineqs, basic_point, is_maximize = parse_lp(content)
 
         obj_formatted = objective if objective else [((linear_prog.ColKind.AFFINE, None), linear_prog.Sign.POS, 0.0)]
         return obj_formatted, ineqs, np.array(basic_point), is_maximize
@@ -330,6 +327,6 @@ def lexer_from_file(fp: str) -> str:
         return f.read()
 
 
-def lexer_header(text: str) -> Tuple[str, Dict[str, int]]:
-    numeric_name, var_names, _, _, _, _ = parse_lp(text)
-    return numeric_name, var_names
+def lexer_header(text: str) -> Tuple[str, Dict[str, int], Any]:
+    numeric_name, var_names, semiring, _, _, _, _ = parse_lp(text)
+    return numeric_name, var_names, semiring

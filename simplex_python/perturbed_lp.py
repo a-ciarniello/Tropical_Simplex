@@ -65,14 +65,14 @@ class PerturbedLP:
         infeas_var = dim
 
         processed_rows = self._process_input_rows(lp)
-        processed_rows = [row + [((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.one(), self.H.zero()))] for row in processed_rows]
+        processed_rows = [row + [((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.zero(), self.H.zero()))] for row in processed_rows]
 
         lower_bounds = self._lower_bounds_builder(lp)
         infeas_lb_row = [
             ((ColKind.AFFINE, None), Sign.NEG, self._phaseI_lower_bound()),
-            ((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.one(), self.H.zero())),
+            ((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.zero(), self.H.zero())),
         ]
-        inf_plane = [((ColKind.VAR, infeas_var), Sign.NEG, self.PertG.from_entries(0, self.G.one(), self.H.zero()))] + self._infinity_plane_row(lp)
+        inf_plane = [((ColKind.VAR, infeas_var), Sign.NEG, self.PertG.from_entries(0, self.G.zero(), self.H.zero()))] + self._infinity_plane_row(lp)
 
         matrix = lower_bounds + processed_rows
         matrix.insert(0, infeas_lb_row)
@@ -84,7 +84,7 @@ class PerturbedLP:
         perturbed_matrix = list(reversed(perturbed))
 
         objective_row = self._epsilon_perturb_row(
-            [((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.one(), self.H.zero()))], 0, nb_columns
+            [((ColKind.VAR, infeas_var), Sign.POS, self.PertG.from_entries(0, self.G.zero(), self.H.zero()))], 0, nb_columns
         )
 
         phaseI_lp = self.LP_pert_mod.init(
@@ -157,16 +157,16 @@ class PerturbedLP:
 
     # --- Helper constructors ---
     def _affine_perturbation(self) -> Any:
-        return self.PertG.from_entries(-1, self.G.one(), self.H.zero())
+        return self.PertG.from_entries(-1, self.G.zero(), self.H.zero())
 
     def _lower_bound(self, col_index: int) -> Any:
-        return self.PertG.from_entries(-2, self.G.one(), self.H.zero())
+        return self.PertG.from_entries(-2, self.G.zero(), self.H.zero())
 
     def _phaseI_lower_bound(self) -> Any:
-        return self.PertG.from_entries(-3, self.G.one(), self.H.zero())
+        return self.PertG.from_entries(-3, self.G.zero(), self.H.zero())
 
     def _upper_bound(self) -> Any:
-        return self.PertG.from_entries(1, self.G.one(), self.H.zero())
+        return self.PertG.from_entries(1, self.G.zero(), self.H.zero())
 
     def _epsilon_perturbation_coeff(self, i: int, j: int, nb_columns: int) -> List[Tuple[int, int]]:
         return self.H.from_list([(i * nb_columns + j, 1)])
@@ -214,7 +214,7 @@ class PerturbedLP:
     def _infinity_plane_row(self, lp: linear_prog.LP) -> List[Tuple[ColIndex, Sign, Any]]:
         row: List[Tuple[ColIndex, Sign, Any]] = [((ColKind.AFFINE, None), Sign.POS, self._upper_bound())]
         for j in range(lp.dim()):
-            row.append(((ColKind.VAR, j), Sign.NEG, self.PertG.from_entries(0, self.G.one(), self.H.zero())))
+            row.append(((ColKind.VAR, j), Sign.NEG, self.PertG.from_entries(0, self.G.zero(), self.H.zero())))
         return row
 
     def _lower_bounds_builder(self, lp: linear_prog.LP) -> List[List[Tuple[ColIndex, Sign, Any]]]:
@@ -222,7 +222,7 @@ class PerturbedLP:
         for j in range(lp.dim()):
             row = [
                 ((ColKind.AFFINE, None), Sign.NEG, self._lower_bound(j)),
-                ((ColKind.VAR, j), Sign.POS, self.PertG.from_entries(0, self.G.one(), self.H.zero())),
+                ((ColKind.VAR, j), Sign.POS, self.PertG.from_entries(0, self.G.zero(), self.H.zero())),
             ]
             rows.insert(0, row)
         return rows

@@ -65,8 +65,8 @@ class LP:
         if kind == ColKind.AFFINE:
             return entry
         if kind == ColKind.VAR and idx is not None:
-            # Linear terms use the group’s “multiplication” (in tropical this is addition).
-            return self.G.mul(entry, point[idx])
+            # Match OCaml implementation: coefficients combine via group addition.
+            return self.G.add(entry, point[idx])
         raise ValueError(f"Invalid col_index {col_index}")
 
     def compute_slack_args(self, row_index: RowIndex, point: np.ndarray):
@@ -113,16 +113,18 @@ class LP:
         return True
 
     def pretty_print(self):
-        print(f"dim = {self.dim()}, nb_ineq = {self.nb_ineq()}")
+        print("Problem Characteristics:\n")
+        print(f"dim = {self.dim()}\nnb_ineq = {self.nb_ineq()}\n")
         print("Objective:")
         for cidx, sign, val in self.objective:
             print(f"  {sign} {cidx}: {self.G.to_string(val)}")
-        print("Inequalities:")
+        print("\nInequalities:")
         for i, ineq in enumerate(self.ineqs):
             terms = ", ".join(
                 f"{sign} {col}: {self.G.to_string(val)}" for col, sign, val in ineq
             )
             print(f"  {i}: {terms}")
+        print("\n")
 
     def _pretty_print_objective(self, myprintf):
         row = self.objective

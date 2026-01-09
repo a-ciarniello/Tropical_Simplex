@@ -354,12 +354,6 @@ class Simplet:
         tg = tangent_digraph.TangentDigraph.compute(lp, basic_point)
 
         if not tg.is_basic_point():
-            # Debug dump to help diagnose mismatched bases
-            print("[DEBUG] init: tangent digraph is not basic", file=sys.stderr)
-            print(f"[DEBUG] nb_hyp={tg._nb_hyp_nodes()}, nb_var={lp.dim()}, nb_ineq={lp.nb_ineq()}", file=sys.stderr)
-            for i in range(lp.nb_ineq()):
-                arcs = tg.get_ineq_node(i)
-                print(f"[DEBUG] ineq {i}: {arcs}", file=sys.stderr)
             raise ValueError("input point is not a basic point")
         if not lp.is_point_feasible(basic_point, allow_all_neg=True):
             raise ValueError("input point is not feasible")

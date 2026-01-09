@@ -35,7 +35,7 @@ def run_main(input_filename: str,
 
 
     try:
-        numeric_name, var_names = parser.lexer_header(lexbuf)
+        numeric_name, var_names, semiring = parser.lexer_header(lexbuf)
     except Exception as e:
         raise RuntimeError(f"lexer error while reading header: {e}") from e
 
@@ -50,8 +50,8 @@ def run_main(input_filename: str,
 
     print("input file parsed")
     print(f"\nVariables: {var_names}")
-    print(f"\nSemiring: {numeric_name}")
-    print(f"\nObjective: {'maximize' if is_maximize else 'minimize'}\n")
+    print(f"\nSemiring: {'min-plus' if semiring == 'minplus' else 'max-plus'}")
+    print(f"\nObjective: {'maximize' if is_maximize else 'minimize'}\n\n")
 
   
     G = group.GroupFromNumeric(Num)
@@ -114,20 +114,19 @@ def run_main(input_filename: str,
             # ----- Caso: nessuna base -> Fase I + Fase II -----
             PertLP = PerturbedLP(LPmod._impl)
             phaseI_lp, basic_point = PertLP.phaseI(lp)
-
-            print("\n------------------\nInitial basic point for phaseI: \n", basic_point)
         
             if log:
-                print("\n------------------\nphaseI lp:", file=log)
-
-            print("\n------------------\n \nphaseI lp constructed:")
-            phaseI_lp.pretty_print()
+                print(f"\n------------------\nphaseI lp:\n\n{phaseI_lp.to_string()}", file=log)
 
             SimpletI = Simplet(PertLP.LP_pert_mod) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
-            print("\n------------------------\nsolving phaseI")
-            if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
+            print("\n==============================================\n\nPhaseI\n\n")
+
+            print("\n------------------------\nsolving phaseI\n------------------------\n")
+            print(f".\n.\n.\n.\n.\n.\n.\n.\n.")
+
+            if log: print("\n------------------\ncall simplex method on phaseI lp\n------------------\n", file=log)
 
 
             pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
@@ -141,35 +140,35 @@ def run_main(input_filename: str,
                 print(f"\n*** Unexpected error: {type(e).__name__}: {e}")
                 raise
 
-            print("------------------------\n\n------------------------\nphaseI solved")
+            print("\n------------------------\nphaseI solved")
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
 
             print(f"------------------------\n\nphaseI optimal basic point: \n {phaseI_opt_basic_point}")
-            print(f"feasibility from phaseI: {feasible}")
+            print(f"\nFeasibility from phaseI: {feasible}")
 
 
             if not feasible:
                 return (Solution.INFEASIBLE, np.array([]))
 
             # ---- Fase II ----
-            print("\n------------------------\nsolving phaseII")
+            print("\n==============================================\n\nPhaseII\n\n")
             phaseII_lp = PertLP.phaseII(lp)
             if log:
-                print("\n---------\nphaseII lp:\n", file=log)
+                print(f"\n---------\nphaseII lp:\n{phaseII_lp.to_string()}\n", file=log)
             phaseII_lp.pretty_print()
 
             phaseII_basic_point = PertLP.phaseII_initial_point_from_phaseI_opt(lp, phaseI_opt_basic_point)
 
-            print(f"\n------------------\nInitial basic point for phaseII: \n {phaseII_basic_point}\n")
-
-
             SimpletII = Simplet(PertLP.LP_pert_mod)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
-            if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)
-            # Phase II uses the original objective direction
+            print("\n------------------------\nsolving phaseII\n------------------------\n")
+            print(f".\n.\n.\n.\n.\n.\n.\n.\n.")
+
+            if log: print("\n------------------\ncall simplex method on phaseII lp\n------------------\n", file=log)
+
             pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
             SimpletII.solve(phaseII, pivot_rule_phaseII, log, max_iterations=1000)
 
@@ -183,7 +182,6 @@ def run_main(input_filename: str,
                 opt_projected = np.array([PertLP.project(x) for x in opt])
                 return (Solution.OPTIMUM, opt_projected)
             else:
-                # red_cost: Some(Pos, _) -> unbounded; None -> bounded; Some(Neg, _) -> assert false
                 unbounded = (infinity_plane_red_cost is not None and infinity_plane_red_cost[0] == "Pos")
                 if unbounded:
                     return (Solution.UNBOUNDED, np.array([]))
@@ -203,32 +201,8 @@ def run_main(input_filename: str,
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-
-        ## Execute a predefined test problem
-        print("\nNo input file provided, running predefined test problem 'non_generic.lp'\n")
-
-        input_file = "simplex_python/problems/non_generic.lp"
-        verbose = False
-
-        try:
-            solution, point = run_main(input_file)
-
-            print("\n--- Final Result ---")
-            print(f"\nResult: {solution.value}")
-            if solution == Solution.OPTIMUM:
-                print("Optimal point:")
-                for i, val in enumerate(point):
-                    print(f"  x{i}: {val}")
-            elif solution == Solution.INFEASIBLE:
-                print("The problem is infeasible")
-            elif solution == Solution.UNBOUNDED:
-                print("The problem is unbounded")
-                
-        except Exception as e:
-            print(f"Error during solving: {e}")
-            import traceback
-            traceback.print_exc()
-
+        print("Error: missing LP input file. usage: .\\main.py <problem.lp>")
+        sys.exit(1)
 
     else:
         # Risolve il problema LP fornito
@@ -236,6 +210,8 @@ if __name__ == "__main__":
         
         try:
             solution, point = run_main(input_file)
+            print("\n------------------------\nphaseII solved\n------------------------\n")
+            print("\n==============================================\n")
 
             print("\n--- Final Result ---")
             print(f"\nResult: {solution.value}")

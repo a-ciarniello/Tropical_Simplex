@@ -1,4 +1,3 @@
-# Test file
 vars: x, y
 semiring: minplus
 numeric: float
