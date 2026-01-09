@@ -126,7 +126,7 @@ def run_main(input_filename: str,
             SimpletI = Simplet(PertLP.LP_pert_mod) 
             phaseI = SimpletI.init(phaseI_lp, basic_point)
 
-            print("solving phaseI")
+            print("\n------------------------\nsolving phaseI")
             if log: print("\n------------------\ncall simplex method on phaseI lp\n", file=log)
 
 
@@ -141,12 +141,12 @@ def run_main(input_filename: str,
                 print(f"\n*** Unexpected error: {type(e).__name__}: {e}")
                 raise
 
-            print("phaseI solved")
+            print("------------------------\n\n------------------------\nphaseI solved")
 
             phaseI_opt_basic_point = SimpletI.basic_point(phaseI)
             feasible = SimpletI.basis_contains(phaseI, PertLP.phaseI_infeasibility_var_lower_bound_row(lp))
 
-            print(f"phaseI optimal basic point: \n {phaseI_opt_basic_point}")
+            print(f"------------------------\n\nphaseI optimal basic point: \n {phaseI_opt_basic_point}")
             print(f"feasibility from phaseI: {feasible}")
 
 
@@ -154,14 +154,18 @@ def run_main(input_filename: str,
                 return (Solution.INFEASIBLE, np.array([]))
 
             # ---- Fase II ----
-            print("solving phaseII")
+            print("\n------------------------\nsolving phaseII")
             phaseII_lp = PertLP.phaseII(lp)
             if log:
                 print("\n---------\nphaseII lp:\n", file=log)
             phaseII_lp.pretty_print()
 
             phaseII_basic_point = PertLP.phaseII_initial_point_from_phaseI_opt(lp, phaseI_opt_basic_point)
-            SimpletII = Simplet(LPmod._impl)
+
+            print(f"\n------------------\nInitial basic point for phaseII: \n {phaseII_basic_point}\n")
+
+
+            SimpletII = Simplet(PertLP.LP_pert_mod)
             phaseII = SimpletII.init(phaseII_lp, phaseII_basic_point)
 
             if log: print("\n------------------\ncall simplex method on phaseII lp\n", file=log)

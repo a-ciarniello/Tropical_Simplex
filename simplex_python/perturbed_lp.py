@@ -49,7 +49,8 @@ class PerturbedLP:
             raise PinftyError()
         if f == 0:
             return self.PertG.second(fgh)
-        return None
+        else:  # f < 0
+            return float("-inf")
 
     # --- Special row indices ---
     def phaseII_upperbound_row(self, lp: linear_prog.LP) -> int:
@@ -146,18 +147,11 @@ class PerturbedLP:
 
     # --- Phase II basic point reconstruction ---
     def phaseII_initial_point_from_phaseI_opt(self, lp: linear_prog.LP, phaseI_opt: np.ndarray) -> np.ndarray:
-        dim, nb_ineq = lp.dim(), lp.nb_ineq()
-        nb_columns = dim + 2
+        dim = lp.dim()
         initial_basic_point = np.empty(dim, dtype=object)
 
         for j in range(dim):
-            row_index = 1 + nb_ineq + (dim - 1 - j)
-            h = self.H.add(
-                self.H.neg(self._epsilon_perturbation_coeff(row_index, j, nb_columns)),
-                self.H.neg(self._epsilon_perturbation_coeff(row_index, nb_columns - 1, nb_columns)),
-            )
-            base = phaseI_opt[j]
-            initial_basic_point[j] = self.PertG.add(base, self.PertG.from_entries(0, self.G.zero(), h))
+            initial_basic_point[j] = phaseI_opt[j]
 
         return initial_basic_point
 
@@ -204,6 +198,9 @@ class PerturbedLP:
         ]
 
     def _process_input_rows(self, lp: linear_prog.LP) -> List[List[Tuple[ColIndex, Sign, Any]]]:
+        # Match the OCaml construction order: prepend each processed row so the
+        # resulting list is reversed (last input inequality first). Row indices
+        # used for epsilon perturbations rely on this ordering.
         processed: List[List[Tuple[ColIndex, Sign, Any]]] = []
         for i in range(lp.nb_ineq()):
             row = lp.get_row((RowKind.INEQ, i))
@@ -211,7 +208,7 @@ class PerturbedLP:
             has_affine = any(col_index[0] == ColKind.AFFINE for col_index, _, _ in row)
             if not has_affine:
                 new_row.append(((ColKind.AFFINE, None), Sign.POS, self._affine_perturbation()))
-            processed.append(new_row)
+            processed.insert(0, new_row)
         return processed
 
     def _infinity_plane_row(self, lp: linear_prog.LP) -> List[Tuple[ColIndex, Sign, Any]]:

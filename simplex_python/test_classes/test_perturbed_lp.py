@@ -89,9 +89,9 @@ class TestPerturbedLP(unittest.TestCase):
         fgh_zero = self.pert_lp._from_entries(0, 25.0, [(1, 1)])
         self.assertEqual(self.pert_lp.project(fgh_zero), 25.0)
 
-        # Case 3: f < 0, should return None (representing -infinity)
+        # Case 3: f < 0, should return -inf (representing -infinity)
         fgh_n_inf = self.pert_lp._from_entries(-1, 50.0, [])
-        self.assertIsNone(self.pert_lp.project(fgh_n_inf))
+        self.assertTrue(np.isneginf(self.pert_lp.project(fgh_n_inf)))
         print("Test Project Method: PASSED")
 
     def test_row_indices(self):

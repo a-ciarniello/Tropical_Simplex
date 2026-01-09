@@ -65,7 +65,7 @@ class LP:
         if kind == ColKind.AFFINE:
             return entry
         if kind == ColKind.VAR and idx is not None:
-            # Tropical linear terms use classical addition on coefficients (group.mul)
+            # Linear terms use the group’s “multiplication” (in tropical this is addition).
             return self.G.mul(entry, point[idx])
         raise ValueError(f"Invalid col_index {col_index}")
 
@@ -82,7 +82,7 @@ class LP:
             cmp_val = self.G.compare(slack, old_slack)
             if cmp_val == 0:
                 return current + [(col_index, sign, entry)]
-            # Match OCaml: keep values when slack > old_slack (cmp == 1)
+            # Match OCaml: keep new maximizers (cmp == 1).
             if cmp_val == 1:
                 return [(col_index, sign, entry)]
             return current
@@ -91,8 +91,7 @@ class LP:
         for col_sign_entry in row:
             minima = step(minima, col_sign_entry)
 
-        # Preserve original order of minima (OCaml reverses at end)
-        minima.reverse()
+        # Match OCaml ordering: keep the fold-left order (reversed vs input).
         return minima
 
     def is_point_feasible(self, point: np.ndarray, allow_all_neg: bool = False) -> bool:

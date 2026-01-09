@@ -274,7 +274,7 @@ class Simplet:
         inst.var_seen = [False for _ in range(dim)]
 
         # mu = max(0, c_j + x_j)
-        mu = self.G.zero()
+        mu = self.G.one()
         for var_index, sign, entry in inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None)):
             if var_index[0] == linear_prog.ColKind.AFFINE:
                 continue
@@ -349,9 +349,17 @@ class Simplet:
 
 
     def init(self, lp: linear_prog.LP, basic_point: np.ndarray) -> "Simplet.Instance":
+        
+        self.G = lp.G
         tg = tangent_digraph.TangentDigraph.compute(lp, basic_point)
 
         if not tg.is_basic_point():
+            # Debug dump to help diagnose mismatched bases
+            print("[DEBUG] init: tangent digraph is not basic", file=sys.stderr)
+            print(f"[DEBUG] nb_hyp={tg._nb_hyp_nodes()}, nb_var={lp.dim()}, nb_ineq={lp.nb_ineq()}", file=sys.stderr)
+            for i in range(lp.nb_ineq()):
+                arcs = tg.get_ineq_node(i)
+                print(f"[DEBUG] ineq {i}: {arcs}", file=sys.stderr)
             raise ValueError("input point is not a basic point")
         if not lp.is_point_feasible(basic_point, allow_all_neg=True):
             raise ValueError("input point is not feasible")
@@ -415,18 +423,7 @@ class Simplet:
         return None
 
     def get_pivot_rule_for_objective(self, maximize: bool = False) -> Callable[["Simplet.Instance"], Optional[int]]:
-        if maximize:
-            return self.bland_rule_maximize
         return self.bland_rule
-
-    def bland_rule_maximize(self, inst: "Simplet.Instance") -> Optional[int]:
-        for i in range(inst.lp.nb_ineq()):
-            if not inst.tangent_digraph.is_hyp_node(i):
-                continue
-            rc = inst.reduced_costs[i]
-            if rc is not None and rc[0] == linear_prog.Sign.POS.value:
-                return i
-        return None
 
     def _find_incoming_arc(self, inst: "Simplet.Instance", i_out: int):
         arcs = inst.tangent_digraph.get_ineq_node(i_out)
@@ -464,7 +461,6 @@ class Simplet:
                 raise ValueError("visited more ordinary segments than dimension")
             visited += 1
             i_ent = self._traverse_ordinary_segment(inst)
-            print(f"Traversed ordinary segment, i_ent: {i_ent}, direction: {inst.direction}, visited: {visited}")
             if i_ent is None:
                 continue
             arg_lambda = inst.arg_lambdas[i_ent]
@@ -472,12 +468,16 @@ class Simplet:
                 raise ValueError("arg_lambda at new basic point must be singleton with Neg")
             # Entering inequality should receive its arcs at the new basic point
             out_var, out_sign, out_entry = arg_lambda[0]
+
             inst.tangent_digraph.add_arc(out_var, i_ent, linear_prog.Sign.NEG, out_entry)
+
             arg_slack = inst.arg_slacks[i_ent]
             if len(arg_slack) != 1:
                 raise ValueError("arg_slack at new basic point must be singleton")
             in_var, in_entry = arg_slack[0]
+
             inst.tangent_digraph.add_arc(in_var, i_ent, linear_prog.Sign.POS, in_entry)
+
             break
 
         # rebuild data
@@ -494,7 +494,6 @@ class Simplet:
                 print(f"\niteration {it}", file=out)
                 self.print_status(inst, out)
             leaving = pivot_rule(inst)
-            print(f"Leaving index: {leaving}")
             if leaving is None:
                 break
             self.pivot(inst, leaving)

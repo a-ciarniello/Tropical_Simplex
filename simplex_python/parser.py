@@ -1,18 +1,9 @@
 import re
 import numeric
 import linear_prog
+import numpy as np
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Iterator
-import numpy as np
-
-
-class ParseError(Exception):
-    pass
-
-
-# ------------------------
-# Tokenizer
-# ------------------------
 
 TOKEN_SPEC = [
     ("LEQ", r"<="),
@@ -119,15 +110,24 @@ class RDParser:
             if tok.value not in self.var_names:
                 raise ParseError(f"Unknown variable '{tok.value}'")
             j = self.var_names[tok.value]
-            return [((linear_prog.ColKind.VAR, j), 0.0)]
+            coeff = 0.0
+            while True:
+                nxt = self._peek()
+                if nxt and nxt.typ in ("PLUS", "MINUS"):
+                    op = nxt.typ
+                    self._eat(nxt.typ)
+                    num_tok = self._eat("NUM")
+                    delta = float(num_tok.value)
+                    if op == "MINUS":
+                        delta = -delta
+                    coeff += delta
+                else:
+                    break
+            return [((linear_prog.ColKind.VAR, j), coeff)]
 
         if tok.typ in ("MAX", "MIN"):
             fn = tok.typ
-            # Enforce semiring restrictions 
-            if fn == "MAX" and self.semiring == "minplus":
-                raise ParseError("'max' not allowed in minplus semiring")
-            if fn == "MIN" and self.semiring == "maxplus":
-                raise ParseError("'min' not allowed in maxplus semiring")
+            # Hybrid objective/constraints: allow both max and min even if semiring is minplus or maxplus.
             self._eat(fn)
             self._eat("LPAREN")
             all_terms: List[Tuple[linear_prog.ColIndex, float]] = []
@@ -177,12 +177,34 @@ def parse_basic_point_line(line: str) -> List[float]:
     return []
 
 
-def map_semiring_to_numeric_name(semiring: str) -> str:
+def map_numeric_to_module_name(numeric_type: str, semiring: Optional[str]) -> str:
+    """
+    Semiring has priority: if semiring is minplus/maxplus, force the tropical backend
+    regardless of the `numeric:` header (to mirror the OCaml solver). Otherwise, use
+    the explicit numeric mapping.
+    """
     if semiring == "minplus":
         return "tropical_min_plus"
     if semiring == "maxplus":
         return "tropical_max_plus"
-    raise ParseError(f"Unknown semiring '{semiring}'")
+
+    numeric_lc = numeric_type.strip().lower()
+    mapping = {
+        "int": "ocaml_int",
+        "float": "ocaml_float",
+        "big_int": "ocaml_big_int",
+        "big_rat": "ocaml_big_rat",
+        "tropical_min_plus": "tropical_min_plus",
+        "tropical_max_plus": "tropical_max_plus",
+    }
+
+    if numeric_lc in mapping:
+        return mapping[numeric_lc]
+
+    if numeric_lc in numeric.NUMERIC_MODULES:
+        return numeric_lc
+
+    raise ParseError(f"Unknown numeric type '{numeric_type}'")
 
 
 def parse_objective_line(line: str, var_names: Dict[str, int], semiring: str) -> Tuple[List[Tuple[linear_prog.ColIndex, linear_prog.Sign, float]], bool]:
@@ -216,10 +238,6 @@ def parse_inequality_line(line: str, var_names: Dict[str, int], semiring: str) -
         raise ParseError("Inequality must contain <= or >=")
 
 
-
-    # Lexer inversion: swap in minplus
-    if semiring == "minplus":
-        op = "GEQ" if op == "LEQ" else "LEQ"
 
     left_terms = parse_linear_form_str(left.strip(), var_names, semiring)
     right_terms = parse_linear_form_str(right.strip(), var_names, semiring)
@@ -289,7 +307,7 @@ def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, List[float], 
     if semiring is None:
         semiring = "minplus"
 
-    numeric_name = map_semiring_to_numeric_name(semiring)
+    numeric_name = map_numeric_to_module_name(numeric_type, semiring)
 
     return numeric_name, var_names, objective, ineqs, basic_point, is_maximize
 

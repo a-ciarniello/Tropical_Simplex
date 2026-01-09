@@ -7,5 +7,6 @@ max(x,y) <=3;
 x >= 1;
 y >= 1;
 
+basic point = 3,1;
 
 
