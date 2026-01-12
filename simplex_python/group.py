@@ -1,3 +1,5 @@
+"""Ordered group primitives powering the tropical simplex implementation."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Tuple, Dict, TypeVar, Generic
@@ -45,7 +47,7 @@ class AdditiveGroup:
 
 
 # ==========================================================
-# Ordered group (Ordered in OCaml)
+# Ordered group
 # ==========================================================
 class OrderedGroup(AdditiveGroup):
     """Additive group with ordering and max."""
@@ -64,7 +66,7 @@ class OrderedGroup(AdditiveGroup):
 # Make(Numeric): build OrderedGroup from Numeric module
 # ==========================================================
 class GroupFromNumeric(OrderedGroup):
-    """Equivalent to Group.Make(Numeric)."""
+    """Adapter that exposes a ``numeric.NumericBase`` instance as an ordered group."""
 
     def __init__(self, NumericModule: numeric.NumericBase):
         self.Numeric = NumericModule
@@ -98,7 +100,7 @@ class GroupFromNumeric(OrderedGroup):
 # Int group
 # ==========================================================
 class IntGroup(OrderedGroup):
-    """Integer group for classical algebra (mul = *)"""
+    """Ordered group over the standard integers with classical operations."""
     def zero(self):
         return 0
     
@@ -125,41 +127,42 @@ class IntGroup(OrderedGroup):
 
 
 # ==========================================================
-# Tropical Int group (for use in tropical context)
+# Tropical Int group
 # ==========================================================
 class TropicalIntGroup(OrderedGroup):
-    """Integer group for tropical min-plus algebra.
-    
-    In tropical min-plus:
-    - Addition (⊕) = min
-    - Multiplication (⊗) = standard addition
-    - Zero (additive identity) = +∞
-    - One (multiplicative identity) = 0
-    
-    Used as components F and H in the perturbed group (F, G, H).
+    """Integer group tailored for tropical min-plus algebra.
+
+    In this algebraic structure the operators are defined as follows:
+    - Addition (⊕) corresponds to the minimum operator.
+    - Multiplication (⊗) corresponds to classical addition.
+    - The additive identity is +∞.
+    - The multiplicative identity is 0.
+
+    The class is primarily employed to instantiate the F and H components of
+    the perturbed group (F, G, H).
     """
     def zero(self):
-        """Additive identity in tropical min-plus = +∞"""
+        """Return the additive identity (+∞) for tropical min-plus algebra."""
         return float('inf')
     
     def one(self):
-        """Multiplicative identity in tropical min-plus = 0"""
+        """Return the multiplicative identity (0) for tropical min-plus algebra."""
         return 0
     
     def add(self, x, y):
-        """Tropical addition = min"""
+        """Implement tropical addition by returning the minimum of the operands."""
         return min(x, y)
     
     def neg(self, x):
-        """Additive inverse: -x in tropical context"""
+        """Return the additive inverse, implemented as the classical negation."""
         return -x
     
     def mul(self, x, y):
-        """Tropical multiplication = standard addition"""
+        """Implement tropical multiplication via classical addition."""
         return x + y
     
     def compare(self, x, y):
-        """Standard comparison"""
+        """Perform standard numerical comparison between the operands."""
         if x < y:
             return -1
         elif x > y:
@@ -168,7 +171,7 @@ class TropicalIntGroup(OrderedGroup):
             return 0
     
     def max(self, x, y):
-        """Maximum value"""
+        """Return the maximum of the operands using the usual order."""
         return max(x, y)
     
     def to_string(self, x):
@@ -274,7 +277,6 @@ class CartesianTriple(OrderedGroup):
     """
     Cartesian product of three ordered groups F, G, H.
     Elements are flat tuples (f, g, h).
-    This matches OCaml's MakeCartesianTriple implementation.
     """
     F: OrderedGroup
     G: OrderedGroup
@@ -298,7 +300,6 @@ class CartesianTriple(OrderedGroup):
     def mul(self, a, b):
         f1, g1, h1 = a
         f2, g2, h2 = b
-        # Tropical multiplication = component-wise addition on (F,G,H)
         return (self.F.add(f1, f2), self.G.mul(g1, g2), self.H.add(h1, h2))
 
     def compare(self, a, b):
@@ -349,11 +350,9 @@ class CartesianPowerSparse(OrderedGroup):
         return []
     
     def one(self):
-        """Multiplicative identity: sparse vector with no entries (implicitly all ones)."""
         return []
 
     def add(self, x: List[Tuple[int, Any]], y: List[Tuple[int, Any]]):
-        """Merge two sorted sparse vectors."""
         res = []
         i = j = 0
         while i < len(x) and j < len(y):
@@ -379,14 +378,12 @@ class CartesianPowerSparse(OrderedGroup):
         return [(i, self.G.neg(v)) for i, v in x]
 
     def mul(self, x: List[Tuple[int, Any]], y: List[Tuple[int, Any]]):
-        """Element-wise multiplication of two sparse vectors."""
         res = []
         i = j = 0
         while i < len(x) and j < len(y):
             ix, vx = x[i]
             iy, vy = y[j]
             if ix == iy:
-                # Multiply corresponds to adding exponents in the base group
                 s = self.G.add(vx, vy)
                 if self.G.compare(s, self.G.zero()) != 0:
                     res.append((ix, s))

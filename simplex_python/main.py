@@ -17,16 +17,16 @@ class LinearProg:
     def init(self, var_names, nb_var, obj, ineq):
         return self._impl.init(var_names, nb_var, obj, ineq)
 
-# Use the LP class from linear_prog module
+
 LP = linear_prog.LP
 
-# ---------- Esiti ----------
+# ---------- Results ----------
 class Solution(Enum):
     INFEASIBLE = "Infeasible"
     UNBOUNDED = "Unbounded"
     OPTIMUM = "Optimum"
 
-# ---------- main porting ----------
+# ---------- Main Script ----------
 def run_main(input_filename: str,
              log_file_name: str = "log") -> Tuple[Solution, np.ndarray]:
 
@@ -68,7 +68,7 @@ def run_main(input_filename: str,
  
     lp: LP = LPmod.init(var_names_fun, nb_var, obj, ineq)
 
-    # Create log file name with current date and time
+
     timestamp = datetime.now().strftime("%Y_%m_%d--%H.%M.%S")
     log_file_name = f"{log_file_name}_{timestamp}.txt"
 
@@ -85,13 +85,15 @@ def run_main(input_filename: str,
 
 
         if basic_point_given:
-            # ----- Caso: base fornita -> tentativo Fase II diretta, con fallback a Fase I -----
             try:
                 basic_point = np.array(basic_point_list)
                 Simp = Simplet(LPmod._impl)
                 phaseII = Simp.init(lp, basic_point)
 
                 print("applying tropical simplex method with given input basic point")
+
+                print("\n------------------------\nsolving phaseII\n------------------------\n")
+                print(f".\n.\n.\n.\n.\n.\n.\n.\n.")
                 if log:
                     print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
 
@@ -111,7 +113,6 @@ def run_main(input_filename: str,
 
 
         if not basic_point_given:
-            # ----- Caso: nessuna base -> Fase I + Fase II -----
             PertLP = PerturbedLP(LPmod._impl)
             phaseI_lp, basic_point = PertLP.phaseI(lp)
         
@@ -152,7 +153,7 @@ def run_main(input_filename: str,
             if not feasible:
                 return (Solution.INFEASIBLE, np.array([]))
 
-            # ---- Fase II ----
+
             print("\n==============================================\n\nPhaseII\n\n")
             phaseII_lp = PertLP.phaseII(lp)
             if log:
@@ -196,7 +197,7 @@ def run_main(input_filename: str,
     finally:
         if log: log.close()
 
-    # Safeguard: all code paths above should return; if not, raise.
+
     raise RuntimeError("run main terminated without producing a result")
 
 if __name__ == "__main__":
@@ -205,7 +206,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     else:
-        # Risolve il problema LP fornito
+
         input_file = sys.argv[1]
         
         try:

@@ -1,3 +1,5 @@
+"""Recursive-descent parser for the custom tropical LP format."""
+
 import re
 import numeric
 import linear_prog
@@ -25,11 +27,14 @@ TOKEN_SPEC = [
 
 @dataclass
 class Token:
+    """Single lexical token emitted by ``tokenize``."""
+
     typ: str
     value: str
 
 
 def tokenize(text: str) -> Iterator[Token]:
+    """Yield tokens from ``text`` according to ``TOKEN_SPEC``."""
     regex = "|".join(f"(?P<{name}>{pattern})" for name, pattern in TOKEN_SPEC)
     for mo in re.finditer(regex, text):
         kind = mo.lastgroup
@@ -58,11 +63,12 @@ def tokenize(text: str) -> Iterator[Token]:
 # ------------------------
 
 class RDParser:
+    """Recursive-descent parser for linear forms under the tropical grammar."""
     def __init__(self, tokens: List[Token], var_names: Dict[str, int], semiring: str):
         self.tokens = tokens
         self.pos = 0
         self.var_names = var_names
-        self.semiring = semiring  # "minplus" or "maxplus"
+        self.semiring = semiring 
 
     def _peek(self) -> Optional[Token]:
         if self.pos < len(self.tokens):
@@ -79,10 +85,12 @@ class RDParser:
         return tok
 
     def parse_linear_form(self) -> List[Tuple[linear_prog.ColIndex, float]]:
+        """Parse a full linear form and return a flat list of terms."""
         terms = self.parse_sum()
         return terms
 
     def parse_sum(self) -> List[Tuple[linear_prog.ColIndex, float]]:
+        """Handle chained additions/subtractions within a linear form."""
         terms = self.parse_term()
         while True:
             tok = self._peek()
@@ -97,6 +105,7 @@ class RDParser:
         return terms
 
     def parse_term(self) -> List[Tuple[linear_prog.ColIndex, float]]:
+        """Parse elementary terms (scalars, variables, or min/max blocks)."""
         tok = self._peek()
         if tok is None:
             raise ParseError("Unexpected end of expression")
@@ -154,16 +163,17 @@ class RDParser:
 
 
 # ------------------------
-# High level parsing (header + rows)
+# High level parsing
 # ------------------------
 
 
 def parse_linear_form_str(expr: str, var_names: Dict[str, int], semiring: str) -> List[Tuple[linear_prog.ColIndex, float]]:
+    """Tokenize and parse ``expr`` into a list of column/weight pairs."""
     tokens = list(tokenize(expr))
     parser = RDParser(tokens, var_names, semiring)
     terms = parser.parse_linear_form()
 
-    # All tokens must be consumed
+
     if parser._peek() is not None:
         raise ParseError(f"Unexpected trailing token {parser._peek()}")
     
@@ -171,6 +181,7 @@ def parse_linear_form_str(expr: str, var_names: Dict[str, int], semiring: str) -
 
 
 def parse_basic_point_line(line: str) -> List[float]:
+    """Extract the basic-point coordinates from a ``basic point = ...`` line."""
     if '=' in line:
         values_part = line.split('=', 1)[1].strip().rstrip(';')
         return [float(v.strip()) for v in values_part.split(',') if v.strip()]
@@ -178,19 +189,13 @@ def parse_basic_point_line(line: str) -> List[float]:
 
 
 def map_numeric_to_module_name(numeric_type: str, semiring: Optional[str]) -> str:
-    """Translate the `numeric:` header into a concrete backend name.
 
-    The OCaml solver always instantiates `Numeric` from the header, so we match that
-    behavior instead of overriding it when a semiring is provided. Users who really
-    want the tropical arithmetic backend can still specify
-    `numeric: tropical_min_plus` or `numeric: tropical_max_plus` explicitly.
-    """
     numeric_lc = numeric_type.strip().lower()
     mapping = {
-        "int": "ocaml_int",
-        "float": "ocaml_float",
-        "big_int": "ocaml_big_int",
-        "big_rat": "ocaml_big_rat",
+        "int": "Numeric_int",
+        "float": "Numeric_float",
+        "big_int": "Numeric_big_int",
+        "big_rat": "Numeric_big_rat",
         "tropical_min_plus": "tropical_min_plus",
         "tropical_max_plus": "tropical_max_plus",
     }
@@ -243,12 +248,10 @@ def parse_inequality_line(line: str, var_names: Dict[str, int], semiring: str) -
     result: List[Tuple[linear_prog.ColIndex, linear_prog.Sign, float]] = []
     if op == "LEQ":
 
-        # l1 <= l2  ==> Pos on right, Neg on left
         result.extend((col_idx, linear_prog.Sign.NEG, coeff) for col_idx, coeff in left_terms)
         result.extend((col_idx, linear_prog.Sign.POS, coeff) for col_idx, coeff in right_terms)
-    else:  # GEQ
+    else:
 
-        # l1 >= l2  ==> Pos on left, Neg on right
         result.extend((col_idx, linear_prog.Sign.POS, coeff) for col_idx, coeff in left_terms)
         result.extend((col_idx, linear_prog.Sign.NEG, coeff) for col_idx, coeff in right_terms)
     return result
@@ -260,7 +263,7 @@ def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, Any, List[flo
     state = "header"
     var_names: Dict[str, int] = {}
     semiring: Optional[str] = None
-    numeric_type = "float"  # kept for compatibility
+    numeric_type = "float"
     objective = None
     is_maximize = False
     ineqs: List[List[Tuple[linear_prog.ColIndex, linear_prog.Sign, float]]] = []
@@ -285,7 +288,6 @@ def parse_lp(content: str) -> Tuple[str, Dict[str, int], Any, Any, Any, List[flo
                 state = "lp"
         elif state == "lp":
             if line.startswith("maximize") or line.startswith("minimize"):
-                # Deduce semiring if absent
                 if semiring is None:
                     if line.startswith("maximize"):
                         semiring = "maxplus"

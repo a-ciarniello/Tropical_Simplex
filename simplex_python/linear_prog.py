@@ -1,3 +1,5 @@
+"""Canonical linear-program representation shared by the tropical simplex stack."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, List, Tuple, Union, Optional
@@ -31,6 +33,8 @@ def _default_var_name(j: int) -> str:
 
 @dataclass
 class LP:
+    """Immutable view of an LP matrix expressed over an ordered group."""
+
     G: group.OrderedGroup
     vars: List[List[Tuple[RowIndex, Sign, Any]]]
     affine_col: List[Tuple[RowIndex, Sign, Any]]
@@ -65,7 +69,6 @@ class LP:
         if kind == ColKind.AFFINE:
             return entry
         if kind == ColKind.VAR and idx is not None:
-            # Match OCaml implementation: coefficients combine via group addition.
             return self.G.add(entry, point[idx])
         raise ValueError(f"Invalid col_index {col_index}")
 
@@ -82,7 +85,6 @@ class LP:
             cmp_val = self.G.compare(slack, old_slack)
             if cmp_val == 0:
                 return current + [(col_index, sign, entry)]
-            # Match OCaml: keep new maximizers (cmp == 1).
             if cmp_val == 1:
                 return [(col_index, sign, entry)]
             return current
@@ -91,7 +93,6 @@ class LP:
         for col_sign_entry in row:
             minima = step(minima, col_sign_entry)
 
-        # Match OCaml ordering: keep the fold-left order (reversed vs input).
         return minima
 
     def is_point_feasible(self, point: np.ndarray, allow_all_neg: bool = False) -> bool:
@@ -148,6 +149,7 @@ class LP:
         self._pretty_print_scalar_product(row_neg, myprintf)
 
     def _split_row(self, row):
+        """Partition a row into POS and NEG contributions."""
         row_pos, row_neg = [], []
         for col_index, sign, entry in row:
             if sign == Sign.POS:
@@ -157,6 +159,7 @@ class LP:
         return row_pos, row_neg
 
     def _pretty_print_scalar_product(self, entries, myprintf):
+        """Render a scalar product of ``entries`` in tropical notation."""
         if not entries:
             myprintf("-oo")
             return
@@ -197,6 +200,8 @@ class LP:
 
 
 class LinearProg:
+    """Mutable builder that assembles ``LP`` instances from raw rows."""
+
     def __init__(self, G: group.OrderedGroup):
         self.G = G
 

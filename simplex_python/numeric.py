@@ -1,9 +1,12 @@
+"""Numeric backends that implement the ordered-group contract."""
+
 from __future__ import annotations
 import numpy as np
 from fractions import Fraction
 from typing import Any, Dict, Type
 
 class NumericBase:
+    """Abstract arithmetic interface used by ``group.GroupFromNumeric``."""
 
     zero: Any
     one: Any
@@ -23,9 +26,10 @@ class NumericBase:
 
 
 # ==========================================================
-#  Cast of OCAML_INT in NumericInt
+#  NumericInt
 # ==========================================================
 class NumericInt(NumericBase):
+    """Standard integer arithmetic."""
     zero = 0
     one = 1
 
@@ -44,9 +48,10 @@ class NumericInt(NumericBase):
 
 
 # ==========================================================
-# Cast of OCAML_FLOAT in NumericFloat
+# NumericFloat
 # ==========================================================
 class NumericFloat(NumericBase):
+    """Floating-point arithmetic implemented via NumPy helpers."""
     zero = 0.0
     one = 1.0
 
@@ -58,7 +63,7 @@ class NumericFloat(NumericBase):
     def div(self, x, y): return np.divide(x, y)
     def pow(self, x, n): return np.power(x, n)
     def compare(self, x, y):
-        # Gestisce sia scalari che array numpy
+        # Handle both scalar and array comparisons
         if isinstance(x, (list, np.ndarray)) or isinstance(y, (list, np.ndarray)):
             x_val = float(x) if not isinstance(x, (list, np.ndarray)) else float(x[0]) if len(x) > 0 else 0.0
             y_val = float(y) if not isinstance(y, (list, np.ndarray)) else float(y[0]) if len(y) > 0 else 0.0
@@ -78,9 +83,10 @@ class NumericFloat(NumericBase):
 
 
 # ==========================================================
-#  Cast of OCAML_BIG_INT in NumericBigInt
+#  NumericBigInt
 # ==========================================================
 class NumericBigInt(NumericBase):
+    """Arbitrary-precision integer arithmetic relying on Python ``int``."""
     zero = 0
     one = 1
 
@@ -99,9 +105,10 @@ class NumericBigInt(NumericBase):
 
 
 # ==========================================================
-# Cast of OCAML_BIG_RAT in NumericBigRat
+# NumericBigRat
 # ==========================================================
 class NumericBigRat(NumericBase):
+    """Exact rational arithmetic based on ``fractions.Fraction``."""
     zero = Fraction(0, 1)
     one = Fraction(1, 1)
 
@@ -134,9 +141,7 @@ class NumericBigRat(NumericBase):
 # Tropical semiring: min-plus algebra
 # ==========================================================
 class TropicalNumericMinPlus(NumericBase):
-    """Implements tropical (min,+) semiring:
-    ⊕ = min, ⊗ = +, zero = +∞, one = 0
-    """
+    """Tropical (min,+) semiring where ⊕=min, ⊗=+, zero=+∞, one=0."""
 
 
     zero = np.inf  # tropical additive identity
@@ -152,12 +157,9 @@ class TropicalNumericMinPlus(NumericBase):
         return np.minimum(x, y)
 
     def neg(self, x):
-        # In tropical linear programming, negation is the classical arithmetic negation
-        # This is used for computing differences like entry_slack - entry_lambda
         return -x
 
     def mul(self, x, y):
-        # Safe add to avoid NaN from inf + (-inf)
         if (np.isposinf(x) and np.isneginf(y)) or (np.isposinf(y) and np.isneginf(x)):
             return np.inf
         return np.add(x, y)
@@ -169,30 +171,25 @@ class TropicalNumericMinPlus(NumericBase):
         return np.add.reduce([x] * n)
 
     def compare(self, x, y):
-        """Compare two values/arrays element-wise.
-        For arrays, uses lexicographic ordering (compares first differing element).
-        Returns: 1 if x > y, -1 if x < y, 0 if x == y
-        """
+        """Compare two values/arrays element-wise."""
+
         if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-            # Convert both to arrays for consistent handling
+
             x_arr = np.asarray(x)
             y_arr = np.asarray(y)
             
-            # Handle same-shaped arrays with element-wise comparison
             if x_arr.shape == y_arr.shape:
                 x_flat = x_arr.flatten()
                 y_flat = y_arr.flatten()
                 
-                # Lexicographic comparison: find first differing element
                 for i in range(len(x_flat)):
                     if x_flat[i] > y_flat[i]:
                         return 1
                     elif x_flat[i] < y_flat[i]:
                         return -1
-                return 0  # All elements are equal
+                return 0 
             else:
                 # Different shapes: compare by broadcasting rules
-                # This is a fallback for when shapes don't match
                 try:
                     diff = x_arr - y_arr
                     diff_flat = diff.flatten()
@@ -228,12 +225,10 @@ class TropicalNumericMinPlus(NumericBase):
 # ==========================================================
 
 class TropicalNumericMaxPlus(NumericBase):
-    """Implements tropical (max,+) semiring:
-    ⊕ = max, ⊗ = +, zero = -∞, one = 0
-    """
+    """Tropical (max,+) semiring where ⊕=max, ⊗=+, zero=-∞, one=0."""
 
-    zero = -np.inf  # tropical additive identity
-    one = 0.0       # multiplicative identity
+    zero = -np.inf  
+    one = 0.0 
 
     def max(self, x, y):
         return np.maximum(x, y)
@@ -245,8 +240,6 @@ class TropicalNumericMaxPlus(NumericBase):
         return np.maximum(x, y)
 
     def neg(self, x):
-        # In tropical linear programming, negation is the classical arithmetic negation
-        # This is used for computing differences like entry_slack - entry_lambda
         return -x
 
     def mul(self, x, y):
@@ -266,25 +259,21 @@ class TropicalNumericMaxPlus(NumericBase):
         Returns: 1 if x > y, -1 if x < y, 0 if x == y
         """
         if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-            # Convert both to arrays for consistent handling
             x_arr = np.asarray(x)
             y_arr = np.asarray(y)
             
-            # Handle same-shaped arrays with element-wise comparison
             if x_arr.shape == y_arr.shape:
                 x_flat = x_arr.flatten()
                 y_flat = y_arr.flatten()
                 
-                # Lexicographic comparison: find first differing element
                 for i in range(len(x_flat)):
                     if x_flat[i] > y_flat[i]:
                         return 1
                     elif x_flat[i] < y_flat[i]:
                         return -1
-                return 0  # All elements are equal
+                return 0 
             else:
                 # Different shapes: compare by broadcasting rules
-                # This is a fallback for when shapes don't match
                 try:
                     diff = x_arr - y_arr
                     diff_flat = diff.flatten()
@@ -320,10 +309,10 @@ class TropicalNumericMaxPlus(NumericBase):
 #  Registry -- Get() interface
 # ==========================================================
 NUMERIC_MODULES: Dict[str, Type[NumericBase]] = {
-    "ocaml_int": NumericInt,
-    "ocaml_float": NumericFloat,
-    "ocaml_big_int": NumericBigInt,
-    "ocaml_big_rat": NumericBigRat,
+    "Numeric_int": NumericInt,
+    "Numeric_float": NumericFloat,
+    "Numeric_big_int": NumericBigInt,
+    "Numeric_big_rat": NumericBigRat,
     "tropical_min_plus": TropicalNumericMinPlus,
     "tropical_max_plus": TropicalNumericMaxPlus,
 }

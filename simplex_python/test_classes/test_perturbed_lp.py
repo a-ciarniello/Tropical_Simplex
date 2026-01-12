@@ -1,3 +1,5 @@
+"""Integration tests for the epsilon-perturbation builders."""
+
 import unittest
 import numpy as np
 import group

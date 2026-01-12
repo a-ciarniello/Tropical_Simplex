@@ -1,3 +1,5 @@
+"""Pivot routines implementing the tropical simplex algorithm."""
+
 from __future__ import annotations
 from typing import Any, Callable, List, Optional, Tuple
 import sys
@@ -6,13 +8,12 @@ import linear_prog
 import tangent_digraph
 import group
 
-# Faithful-ish port of simplex_ocaml/src/simplet.ml.
-# Provides the same public API shape as simplex_python/simplet.py but with a class closer to the OCaml control flow.
 
-IneqStatus = linear_prog.Sign  # use Sign for reduced_cost sign values
+IneqStatus = linear_prog.Sign 
 
 
 class Simplet:
+    """Stateful driver that runs the tropical simplex method on an LP model."""
     def __init__(self, lp_module_or_instance):
         if hasattr(lp_module_or_instance, "G") and hasattr(lp_module_or_instance, "nb_ineq"):
             self.LP = lp_module_or_instance  # LP instance
@@ -22,6 +23,8 @@ class Simplet:
             self.G: group.OrderedGroup = lp_module_or_instance.G
 
     class Instance:
+        """Mutable solver state tied to a specific LP and basic point."""
+
         def __init__(self, lp: linear_prog.LP, point: np.ndarray):
             self.lp = lp
             self.point = point.copy()
@@ -40,7 +43,7 @@ class Simplet:
             self.var_seen: List[bool] = [False for _ in range(dim)]
             self.iteration = 0
 
-    # ---- core helpers ----
+    # ---- Helpers ----
     def _compute_arg_slacks_pos(self, inst: "Simplet.Instance") -> None:
         nb_ineq = inst.lp.nb_ineq()
         dim = inst.lp.dim()
@@ -51,7 +54,7 @@ class Simplet:
             arg_slack = inst.lp.compute_slack_args((linear_prog.RowKind.INEQ, i), inst.point)
             pos_entries = [(col_index, entry) for col_index, sign, entry in arg_slack if sign == linear_prog.Sign.POS]
 
-            # Fallback: keep a neg minimizer if no pos minimizer exists (e.g., infinity-plane rows)
+
             if not pos_entries and arg_slack:
                 pos_entries = [(arg_slack[0][0], arg_slack[0][2])]
 
@@ -91,7 +94,7 @@ class Simplet:
                     raise ValueError("expected BreakHyp while initializing direction")
                 inst.ineq_status[i] = "Basis"
                 return acc
-            else:  # VarNode
+            else:  
                 acc.append(node_val)
                 return acc
         direction = inst.tangent_digraph.dfs_fold_acyclic_graph(visit, [], ("VarNode", incoming_var_index))
@@ -141,7 +144,7 @@ class Simplet:
         old_var = same_oriented[0][0]
         inst.tangent_digraph.remove_arc(old_var, break_index)
 
-        # DFS from break hyp to collect new direction vars and flip BreakHyp->Basis
+        
         def upd(acc, node):
             ntype, nval = node
             if ntype == "IneqNode":
@@ -156,7 +159,7 @@ class Simplet:
         new_dir_vars = inst.tangent_digraph.dfs_fold_acyclic_graph(upd, [], ("IneqNode", break_index))
         inst.direction = new_dir_vars + inst.direction
 
-        # deactivate ent hyp touched by new_dir_vars
+        
         for var_index in new_dir_vars:
             kind, j = var_index
             if kind == linear_prog.ColKind.AFFINE:
@@ -169,7 +172,7 @@ class Simplet:
 
         inst.tangent_digraph.add_arc(new_var, break_index, linear_prog.Sign(new_sign), new_entry)
 
-        # update arg_lambda for rows touched by new_dir_vars
+       
         for var_index in new_dir_vars:
             for row_index, sign, entry in inst.lp.get_col(var_index):
                 if row_index[0] != linear_prog.RowKind.INEQ:
@@ -207,7 +210,7 @@ class Simplet:
                     continue
                 if cmp == 0:
                     arg_len.append(i)
-                else:  # smaller
+                else:
                     length = bound_i
                     arg_len = [i]
         if length is None or len(arg_len) != 1:
@@ -241,7 +244,6 @@ class Simplet:
             if ntype == "IneqNode":
                 i = nval
                 ineq_node = inst.tangent_digraph.get_ineq_node(i)
-                # choose the unique Var neighbor not yet in permutation
                 vars_here = [(var, sign, entry) for var, sign, entry in ineq_node if var[0] == linear_prog.ColKind.VAR]
                 if len(vars_here) != 1 and len(vars_here) != 2:
                     raise ValueError("bad degree for hyp node")
@@ -265,7 +267,6 @@ class Simplet:
     def _compute_reduced_costs(self, inst: "Simplet.Instance") -> None:
         nb_ineq = inst.lp.nb_ineq()
         dim = inst.lp.dim()
-        # Ensure slack arg sets are available before computing costs
         if not any(inst.arg_slacks):
             self._compute_arg_slacks_pos(inst)
         self._compute_max_permutation(inst)
@@ -273,7 +274,6 @@ class Simplet:
         inst.dual_slacks = [None for _ in range(dim)]
         inst.var_seen = [False for _ in range(dim)]
 
-        # mu = max(0, c_j + x_j)
         mu = self.G.one()
         for var_index, sign, entry in inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None)):
             if var_index[0] == linear_prog.ColKind.AFFINE:
@@ -282,7 +282,6 @@ class Simplet:
             mu = self.G.max(mu, val)
         neg_mu = self.G.neg(mu)
 
-        # init distances objective->var
         for var_index, sign, entry in inst.lp.get_row((linear_prog.RowKind.OBJECTIVE, None)):
             if var_index[0] != linear_prog.ColKind.VAR:
                 continue
@@ -338,7 +337,7 @@ class Simplet:
                 if better:
                     inst.dual_slacks[l] = (new_sign, new_dist)
 
-        # rescale reduced costs
+
         for i in range(nb_ineq):
             slack_i = inst.lp.compute_entry_plus_var(inst.arg_slacks[i][0][1], inst.arg_slacks[i][0][0], inst.point)
             z_i = inst.reduced_costs[i]
@@ -427,6 +426,7 @@ class Simplet:
         return None
 
     def pivot(self, inst: "Simplet.Instance", i_out: int) -> None:
+        """Execute one pivot that removes inequality ``i_out`` from the basis."""
         if not self.basis_contains(inst, i_out):
             raise ValueError("input index does not belong to the basis")
         nb_ineq = inst.lp.nb_ineq()
@@ -448,7 +448,7 @@ class Simplet:
         self._deactivate_ent_hyp_touching_direction(inst)
         self._compute_arg_lambdas(inst)
 
-        # traverse tropical edge
+
         visited = 0
         while True:
             if visited > inst.lp.dim():
@@ -460,7 +460,6 @@ class Simplet:
             arg_lambda = inst.arg_lambdas[i_ent]
             if len(arg_lambda) != 1 or arg_lambda[0][1] != linear_prog.Sign.NEG.value:
                 raise ValueError("arg_lambda at new basic point must be singleton with Neg")
-            # Entering inequality should receive its arcs at the new basic point
             out_var, out_sign, out_entry = arg_lambda[0]
 
             inst.tangent_digraph.add_arc(out_var, i_ent, linear_prog.Sign.NEG, out_entry)
@@ -474,12 +473,12 @@ class Simplet:
 
             break
 
-        # rebuild data
         inst.arg_slacks = [[] for _ in range(nb_ineq)]
         self._compute_arg_slacks_pos(inst)
         self._compute_reduced_costs(inst)
 
     def solve(self, inst: "Simplet.Instance", pivot_rule: Callable[["Simplet.Instance"], Optional[int]], out=None, max_iterations: int = 10000) -> None:
+        """Iteratively pivot until optimality or ``max_iterations`` is reached."""
         it = 1
         while True:
             if it > max_iterations:
@@ -492,7 +491,3 @@ class Simplet:
                 break
             self.pivot(inst, leaving)
             it += 1
-
-
-# Convenience alias to match existing code import pattern
-SimpletOcaml = Simplet

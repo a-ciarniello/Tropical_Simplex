@@ -1,3 +1,5 @@
+"""Regression tests covering the ordered-group helpers in group.py."""
+
 from __future__ import annotations
 import unittest
 import numeric
@@ -41,12 +43,12 @@ class TestGroup(unittest.TestCase):
 
     def test_reverse_order(self):
         """Verify order inversion"""
-        self.assertEqual(self.G_rev.compare(5, 2), -1)  # reversed order
+        self.assertEqual(self.G_rev.compare(5, 2), -1)  
         self.assertEqual(self.G_rev.compare(2, 5), 1)
         self.assertEqual(self.G_rev.add(2, 3), 5)
         self.assertEqual(self.G_rev.neg(3), -3)
         self.assertEqual(self.G_rev.zero(), 0)
-        self.assertEqual(self.G_rev.max(3, 5), 3)  # inverted
+        self.assertEqual(self.G_rev.max(3, 5), 3)  
 
     # === Tests on Cartesian products ===
     def test_cartesian_product_operations(self):
@@ -70,7 +72,7 @@ class TestGroup(unittest.TestCase):
         self.assertEqual(sorted(added), [(0, 2), (1, 3), (2, 5)])
         negated = self.G_sparse.neg(x)
         self.assertEqual(negated, [(0, -2), (2, -5)])
-        # lexicographic comparison
+
         self.assertEqual(self.G_sparse.compare([(0, 1)], [(0, 2)]), -1)
         self.assertEqual(self.G_sparse.compare([(0, 2)], [(0, 1)]), 1)
         self.assertEqual(self.G_sparse.compare([(0, 1)], [(0, 1)]), 0)
@@ -82,7 +84,7 @@ class TestGroup(unittest.TestCase):
         """Verify sorting and cleaning of from_list"""
         lst = [(2, 5), (0, 1), (1, 0)]
         res = self.G_sparse.from_list(lst)
-        # must be sorted and without zeros
+
         self.assertEqual(res, [(0, 1), (2, 5)])
 
     # === Consistency tests ===

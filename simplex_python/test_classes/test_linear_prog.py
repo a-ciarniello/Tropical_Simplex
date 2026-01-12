@@ -1,3 +1,5 @@
+"""Unit tests validating the canonical LP container implementation."""
+
 import unittest
 import numpy as np
 import numeric
@@ -5,20 +7,10 @@ import group
 import linear_prog
 
 class TestLinearProg(unittest.TestCase):
-    """
-    Test suite per il modulo linear_prog.
-    
-    Questa classe verifica le funzionalità principali della classe LP,
-    inclusa la sua creazione, il calcolo delle dimensioni, il calcolo dello slack
-    e i controlli di fattibilità.
-    I commenti nel codice sono in inglese per coerenza.
-    """
+    """Validate dimension bookkeeping, slack computations, and feasibility checks."""
 
     def setUp(self):
-        """
-        Set up a common testing environment before each test method is run.
-        This creates a small, consistent LP instance for all tests.
-        """
+        """Build a minimal tropical LP used across every test case."""
         # 1. Define the numeric and group structure (Min-Plus algebra)
         Num = numeric.TropicalNumericMinPlus()
         G = group.GroupFromNumeric(Num)
@@ -46,21 +38,12 @@ class TestLinearProg(unittest.TestCase):
         self.point = np.array([0.0, 1.0])  # Corresponds to x=0, y=1
 
     def test_dimensions(self):
-        """
-        Verify that the LP reports its dimensions correctly.
-        """
-        self.assertEqual(self.lp.dim(), 2, "La dimensione dell'LP dovrebbe essere 2")
-        self.assertEqual(self.lp.nb_ineq(), 1, "L'LP dovrebbe avere 1 disequazione")
+        """LP should report both dimension and inequality count accurately."""
+        self.assertEqual(self.lp.dim(), 2, "LP dimension mismatch")
+        self.assertEqual(self.lp.nb_ineq(), 1, "Unexpected number of inequalities")
 
     def test_compute_slack_args(self):
-        """
-        Test the computation of slack arguments for a given inequality and point.
-        
-        For the inequality x+2 <= y+4 and point x=0, y=1:
-        - The positive term's value is x + 2 = 0 + 2 = 2.0
-        - The negative term's value is y + 4 = 1 + 4 = 5.0
-        The minimum is 2.0, achieved by the positive term.
-        """
+        """Slack arguments should capture the minimum-attaining row entries."""
         slack_args = self.lp.compute_slack_args((linear_prog.RowKind.INEQ, 0), self.point)
         
         # The expected result is the information of the term that achieved the minimum
@@ -68,32 +51,18 @@ class TestLinearProg(unittest.TestCase):
             ((linear_prog.ColKind.VAR, 0), linear_prog.Sign.POS, 2.0)
         ]
         
-        self.assertEqual(slack_args, expected_args, "Gli argomenti dello slack non sono calcolati correttamente")
+        self.assertEqual(slack_args, expected_args, "Unexpected slack-arg selection")
 
     def test_point_feasibility(self):
-        """
-        Check if a given point is correctly identified as feasible.
-        
-        A point is feasible if the minimum slack is not achieved exclusively
-        by negative terms. In our case, the minimum is achieved by a positive
-        term, so the point is feasible.
-        """
+        """Point should satisfy the inequality when the minimum is positive-sided."""
         is_feasible = self.lp.is_point_feasible(self.point)
-        self.assertTrue(is_feasible, "Il punto [0.0, 1.0] dovrebbe essere fattibile")
+        self.assertTrue(is_feasible, "Reference point expected to be feasible")
 
     def test_point_infeasibility(self):
-        """
-        Check if an infeasible point is correctly identified.
-        
-        Let's test with point x=4, y=1.
-        - Positive term: x + 2 = 4 + 2 = 6.0
-        - Negative term: y + 4 = 1 + 4 = 5.0
-        The minimum is 5.0, achieved by the negative term. Since only the
-        negative term achieves the minimum, the point is infeasible.
-        """
+        """Point should be rejected when only negative terms realize the minimum."""
         infeasible_point = np.array([4.0, 1.0])
         is_feasible = self.lp.is_point_feasible(infeasible_point)
-        self.assertFalse(is_feasible, "Il punto [4.0, 1.0] dovrebbe essere non fattibile")
+        self.assertFalse(is_feasible, "Point incorrectly marked as feasible")
 
 
 if __name__ == "__main__":

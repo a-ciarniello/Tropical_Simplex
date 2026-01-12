@@ -1,3 +1,5 @@
+"""Targeted tests for the tangent-digraph combinatorial utilities."""
+
 from __future__ import annotations
 import unittest
 import numpy as np
@@ -19,7 +21,6 @@ class TestTangentDigraph(unittest.TestCase):
 
         # === LP ===
         # minimize x + 3
-        # s.t. x + 2 <= y + 4
         def var_names(i): return ["x", "y", "z"][i]
 
         objective = [
@@ -43,7 +44,7 @@ class TestTangentDigraph(unittest.TestCase):
         ]
 
         cls.lp = cls.LPmod.init(var_names, 3, objective, ineqs)
-        cls.point_feasible = np.array([0.0, 0.0, 0.0])  # candidate basic point
+        cls.point_feasible = np.array([0.0, 0.0, 0.0])
 
     def test_compute_tangent_graph(self):
         """Correct construction of the tangent graph"""

@@ -1,3 +1,5 @@
+"""Regression tests spanning the numeric backends used by the solver."""
+
 from __future__ import annotations
 import unittest
 from fractions import Fraction
@@ -9,11 +11,10 @@ class TestNumeric(unittest.TestCase):
     """Unit tests specific to the numeric.py module"""
 
     def test_get_and_registry(self):
-        """Verify that all numeric modules are registered"""
+        """Verify that every declared numeric backend can be instantiated."""
         names = numeric.get_name_of_modules()
         self.assertIn("tropical_min_plus", names)
         self.assertIn("tropical_max_plus", names)
-        self.assertIn("ocaml_float", names)
         for name in names:
             obj = numeric.get(name)
             self.assertTrue(hasattr(obj, "add"))
@@ -66,9 +67,9 @@ class TestNumeric(unittest.TestCase):
     # === TROPICAL MIN-PLUS ===
     def test_tropical_minplus(self):
         N = numeric.TropicalNumericMinPlus()
-        self.assertEqual(N.add(3, 5), 3)        # min(3,5)
-        self.assertEqual(N.mul(3, 5), 8)        # 3+5
-        self.assertEqual(N.div(7, 2), 5)        # 7-2
+        self.assertEqual(N.add(3, 5), 3)       
+        self.assertEqual(N.mul(3, 5), 8)       
+        self.assertEqual(N.div(7, 2), 5)       
         self.assertEqual(N.pow(2, 3), 6)
         self.assertEqual(N.compare(5, 5), 0)
         self.assertEqual(N.compare(3, 5), -1)
@@ -81,8 +82,8 @@ class TestNumeric(unittest.TestCase):
     # === TROPICAL MAX-PLUS ===
     def test_tropical_maxplus(self):
         N = numeric.TropicalNumericMaxPlus()
-        self.assertEqual(N.add(3, 5), 5)        # max(3,5)
-        self.assertEqual(N.mul(3, 5), 8)        # 3+5
+        self.assertEqual(N.add(3, 5), 5)       
+        self.assertEqual(N.mul(3, 5), 8)       
         self.assertEqual(N.div(7, 2), 5)
         self.assertEqual(N.pow(2, 3), 6)
         self.assertEqual(N.compare(5, 5), 0)

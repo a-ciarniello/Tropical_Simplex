@@ -1,3 +1,5 @@
+"""Tangent digraph utilities backing the tropical simplex combinatorics."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,25 +16,29 @@ RowIndex = linear_prog.RowIndex
 VarIndex = ColIndex
 IneqIndex = int
 
-VarNodeIndex = Tuple[str, VarIndex]  # ("VarNode", var_index)
-IneqNodeIndex = Tuple[str, int]      # ("IneqNode", i)
+VarNodeIndex = Tuple[str, VarIndex]
+IneqNodeIndex = Tuple[str, int]      
 NodeIndex = Union[VarNodeIndex, IneqNodeIndex]
 
 
 @dataclass
 class TangentDigraph:
+    """Bidirectional incidence structure between variables and inequalities."""
+
     var_nodes: List[List[Tuple[IneqIndex, Sign, Any]]]
     affine_var_node: List[Tuple[IneqIndex, Sign, Any]]
     ineq_nodes: List[List[Tuple[VarIndex, Sign, Any]]]
 
     # --- Accessors ---
     def get_ineq_node(self, ineq_index: int) -> List[Tuple[VarIndex, Sign, Any]]:
+        """Return all arcs entering inequality ``ineq_index``."""
         try:
             return self.ineq_nodes[ineq_index]
         except IndexError as exc:
             raise ValueError("tangent_digraph.get_ineq_node: index out of bounds") from exc
 
     def get_var_node(self, var_index: VarIndex) -> List[Tuple[IneqIndex, Sign, Any]]:
+        """Return the arcs attached to ``var_index`` (variable or affine)."""
         kind, j = var_index
         try:
             if kind == ColKind.AFFINE:
@@ -58,6 +64,7 @@ class TangentDigraph:
     # --- Construction ---
     @classmethod
     def compute(cls, lp: linear_prog.LP, point: Any) -> "TangentDigraph":
+        """Construct the tangent digraph induced by ``point``."""
         dim = lp.dim()
         nb_ineq = lp.nb_ineq()
 
@@ -106,10 +113,12 @@ class TangentDigraph:
 
     # --- Mutations ---
     def contains_arc(self, var_index: VarIndex, ineq_index: int) -> bool:
+        """Return ``True`` if the arc ``var_index -> ineq_index`` already exists."""
         ineq_node = self.get_ineq_node(ineq_index)
         return any(iter_var_index == var_index for iter_var_index, _, _ in ineq_node)
 
     def add_arc(self, var_index: VarIndex, ineq_index: int, sign: Sign, entry: Any) -> None:
+        """Insert an arc between ``var_index`` and ``ineq_index`` with ``sign``."""
         def ensure_absent(arcs: List[Tuple[Any, Any, Any]], node_index: Any) -> None:
             for iter_node_index, _, _ in arcs:
                 if iter_node_index == node_index:
@@ -128,6 +137,7 @@ class TangentDigraph:
         self.ineq_nodes[ineq_index] = [(var_index, sign, entry)] + ineq_node
 
     def remove_arc(self, var_index: VarIndex, ineq_index: int) -> None:
+        """Remove the unique arc linking ``var_index`` and ``ineq_index``."""
         def remove_arc_from_list(node_index: Any, lst: List[Tuple[Any, Any, Any]]):
             to_remove = [arc for arc in lst if arc[0] == node_index]
             remaining = [arc for arc in lst if arc[0] != node_index]
@@ -149,6 +159,7 @@ class TangentDigraph:
         self.ineq_nodes[ineq_index] = new_ineq_node
 
     def remove_arcs_of_node(self, node_index: NodeIndex) -> None:
+        """Drop every arc connected to ``node_index``."""
         node_type, payload = node_index
         if node_type == "VarNode":
             arcs = list(self.get_var_node(payload))
@@ -163,6 +174,7 @@ class TangentDigraph:
 
     # --- Traversals ---
     def dfs_fold_acyclic_graph(self, f: Callable[[Any, NodeIndex], Any], acc: Any, start_node_index: NodeIndex) -> Any:
+        """Depth-first traversal that folds values along the unique acyclic path."""
         def dfs(node_index: NodeIndex, parent: NodeIndex | None, acc_value: Any) -> Any:
             acc1 = f(acc_value, node_index)
             node_type, payload = node_index
@@ -237,6 +249,7 @@ class TangentDigraph:
         depth_first_iter_aux(node_index)
 
     def nb_connected_component(self) -> int:
+        """Count connected components in the bipartite digraph."""
         var_seen = [False] * len(self.var_nodes)
         affine_seen = False
         ineq_seen = [False] * len(self.ineq_nodes)

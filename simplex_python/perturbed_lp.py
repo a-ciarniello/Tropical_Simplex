@@ -1,3 +1,5 @@
+"""Builders for the epsilon-perturbed auxiliary LPs used in Phase I/II."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -17,7 +19,7 @@ class PinftyError(Exception):
 
 
 class PerturbedLP:
-    """Perturbed Phase I/II LP builder over (F,G,H) = Int * G * sparse Int."""
+    """Construct Phase I/II problems in the lexicographically perturbed space."""
 
     def __init__(self, lp_module: linear_prog.LinearProg):
         self.LP = lp_module
@@ -29,7 +31,7 @@ class PerturbedLP:
 
         self.LP_pert_mod = linear_prog.LinearProg(self.PertG)
 
-    # --- Low-level accessors ---
+    # --- Low-level helper ---
     def _from_entries(self, f: int, g: Any, h: List[Tuple[int, int]]) -> Any:
         return self.PertG.from_entries(f, g, h)
 
@@ -44,23 +46,27 @@ class PerturbedLP:
 
     # --- Projection ---
     def project(self, fgh: Any) -> Optional[Any]:
+        """Project a perturbed point back onto the base group, if finite."""
         f = self.PertG.first(fgh)
         if f > 0:
             raise PinftyError()
         if f == 0:
             return self.PertG.second(fgh)
-        else:  # f < 0
+        else:
             return float("-inf")
 
     # --- Special row indices ---
     def phaseII_upperbound_row(self, lp: linear_prog.LP) -> int:
+        """Return the index of the infinity-plane row inside Phase II."""
         return lp.dim() + lp.nb_ineq()
 
     def phaseI_infeasibility_var_lower_bound_row(self, lp: linear_prog.LP) -> int:
+        """Return the row index enforcing the Phase I infeasibility variable bound."""
         return lp.dim() + lp.nb_ineq()
 
-    # --- Phase I ---
+
     def phaseI(self, lp: linear_prog.LP) -> Tuple[linear_prog.LP, np.ndarray]:
+        """Build Phase I LP and its canonical starting point."""
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
         infeas_var = dim
 
@@ -115,8 +121,9 @@ class PerturbedLP:
 
         return phaseI_lp, initial_basic_point
 
-    # --- Phase II ---
+
     def phaseII(self, lp: linear_prog.LP) -> linear_prog.LP:
+        """Derive the perturbed Phase II LP ready for simplex iterations."""
         dim, nb_ineq = lp.dim(), lp.nb_ineq()
 
         processed_rows = self._process_input_rows(lp)
@@ -145,8 +152,9 @@ class PerturbedLP:
             ineqs=pert_matrix,
         )
 
-    # --- Phase II basic point reconstruction ---
+
     def phaseII_initial_point_from_phaseI_opt(self, lp: linear_prog.LP, phaseI_opt: np.ndarray) -> np.ndarray:
+        """Project the optimal Phase I point to obtain a Phase II initializer."""
         dim = lp.dim()
         initial_basic_point = np.empty(dim, dtype=object)
 
@@ -198,9 +206,6 @@ class PerturbedLP:
         ]
 
     def _process_input_rows(self, lp: linear_prog.LP) -> List[List[Tuple[ColIndex, Sign, Any]]]:
-        # Match the OCaml construction order: prepend each processed row so the
-        # resulting list is reversed (last input inequality first). Row indices
-        # used for epsilon perturbations rely on this ordering.
         processed: List[List[Tuple[ColIndex, Sign, Any]]] = []
         for i in range(lp.nb_ineq()):
             row = lp.get_row((RowKind.INEQ, i))
