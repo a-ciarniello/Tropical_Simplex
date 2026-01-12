@@ -8,4 +8,4 @@ __pycache__/
 *.xlsx
 .idea/**
 simplex_python/Logs/**
-**.ipynb
+
