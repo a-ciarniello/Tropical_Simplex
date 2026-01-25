@@ -77,9 +77,8 @@ class TangentDigraph:
         affine_var_node: List[Tuple[IneqIndex, Sign, Any]] = []
         ineq_nodes: List[List[Tuple[VarIndex, Sign, Any]]] = [[] for _ in range(nb_ineq)]
 
-        def compute_hyp_nodes(ineq_index: int, hyp_nodes: List[int]) -> List[int]:
-            if ineq_index >= nb_ineq:
-                return hyp_nodes
+        hyp_nodes: List[int] = []
+        for ineq_index in range(nb_ineq):
             arg = lp.compute_slack_args((RowKind.INEQ, ineq_index), point)
             pos, neg = False, False
             for _, sign, _ in arg:
@@ -93,10 +92,7 @@ class TangentDigraph:
                 )
             if pos and neg:
                 ineq_nodes[ineq_index] = arg
-                return compute_hyp_nodes(ineq_index + 1, hyp_nodes + [ineq_index])
-            return compute_hyp_nodes(ineq_index + 1, hyp_nodes)
-
-        hyp_nodes = compute_hyp_nodes(0, [])
+                hyp_nodes.append(ineq_index)
 
         def add_arcs_from_ineq(ineq_index: int) -> None:
             for var_index, sign, entry in ineq_nodes[ineq_index]:
@@ -330,16 +326,10 @@ class TangentDigraph:
             )
             return False
 
-        def degrees_ok(idx: int) -> bool:
-            if idx >= len(self.ineq_nodes):
-                return True
+        for idx in range(len(self.ineq_nodes)):
             nb_pos, nb_neg = self._degree_of_ineq_node(idx)
-            if (nb_pos, nb_neg) in ((1, 1), (0, 0)):
-                return degrees_ok(idx + 1)
-            return False
-
-        if not degrees_ok(0):
-            return False
+            if (nb_pos, nb_neg) not in ((1, 1), (0, 0)):
+                return False
 
         nb_cc = self.nb_connected_component()
         if nb_cc == (nb_ineq_nodes - (nb_var_nodes - 1) + 1):

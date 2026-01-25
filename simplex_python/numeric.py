@@ -3,6 +3,7 @@
 from __future__ import annotations
 import numpy as np
 from fractions import Fraction
+from decimal import Decimal
 from typing import Any, Dict, Type
 
 class NumericBase:
@@ -130,11 +131,14 @@ class NumericBigRat(NumericBase):
 
     def of_int(self, x): return Fraction(x, 1)
     def of_string(self, s):
+        s = s.strip()
         if "/" in s:
             num, den = s.split("/")
             return Fraction(int(num), int(den))
-        else:
-            return Fraction(int(s), 1)
+        try:
+            return Fraction(s)
+        except ValueError:
+            return Fraction(Decimal(s))
     def to_string(self, x): return str(x)
 
 # ==========================================================

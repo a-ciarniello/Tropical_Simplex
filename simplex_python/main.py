@@ -98,7 +98,7 @@ def run_main(input_filename: str,
                     print("\n------------------\napplying tropical simplex method with given input basic point\n", file=log)
 
                 pivot_rule = Simp.get_pivot_rule_for_objective(maximize=is_maximize)
-                Simp.solve(phaseII, pivot_rule, log, max_iterations=1000)
+                Simp.solve(phaseII, pivot_rule, log)
 
                 opt = Simp.basic_point(phaseII)
                 opt_projected = opt.copy()
@@ -133,7 +133,7 @@ def run_main(input_filename: str,
             pivot_rule_phaseI = SimpletI.get_pivot_rule_for_objective(maximize=False)
             
             try:
-                SimpletI.solve(phaseI, pivot_rule_phaseI, log, max_iterations=50)
+                SimpletI.solve(phaseI, pivot_rule_phaseI, log)
             except RuntimeError as e:
                 print(f"\n*** RuntimeError caught: {e}")
                 raise
@@ -171,7 +171,7 @@ def run_main(input_filename: str,
             if log: print("\n------------------\ncall simplex method on phaseII lp\n------------------\n", file=log)
 
             pivot_rule_phaseII = SimpletII.get_pivot_rule_for_objective(maximize=is_maximize)
-            SimpletII.solve(phaseII, pivot_rule_phaseII, log, max_iterations=1000)
+            SimpletII.solve(phaseII, pivot_rule_phaseII, log)
 
 
             ub_row = PertLP.phaseII_upperbound_row(lp)

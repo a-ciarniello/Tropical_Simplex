@@ -477,11 +477,11 @@ class Simplet:
         self._compute_arg_slacks_pos(inst)
         self._compute_reduced_costs(inst)
 
-    def solve(self, inst: "Simplet.Instance", pivot_rule: Callable[["Simplet.Instance"], Optional[int]], out=None, max_iterations: int = 10000) -> None:
-        """Iteratively pivot until optimality or ``max_iterations`` is reached."""
+    def solve(self, inst: "Simplet.Instance", pivot_rule: Callable[["Simplet.Instance"], Optional[int]], out=None, max_iterations: Optional[int] = None) -> None:
+        """Iteratively pivot until optimality or ``max_iterations`` (if any) is reached."""
         it = 1
         while True:
-            if it > max_iterations:
+            if max_iterations is not None and it > max_iterations:
                 raise RuntimeError("maximum iterations reached")
             if out:
                 print(f"\niteration {it}", file=out)
