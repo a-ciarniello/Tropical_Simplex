@@ -1,11 +1,7 @@
 /simplex_ocaml/**
-/ReluplexCav2017/**
 __pycache__/
 *.pyc
 *.md
 *.pt
-/model_weights/**
-*.xlsx
-.idea/**
-simplex_python/Logs/**
+
 
