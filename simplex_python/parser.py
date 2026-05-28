@@ -192,7 +192,6 @@ class RDParser:
 
         if tok.typ in ("MAX", "MIN"):
             fn = tok.typ
-            # Hybrid objective/constraints: allow both max and min even if semiring is minplus or maxplus.
             self._eat(fn)
             self._eat("LPAREN")
             all_terms: List[Tuple[linear_prog.ColIndex, float]] = []
@@ -265,7 +264,9 @@ def map_numeric_to_module_name(numeric_type: str, semiring: Optional[str]) -> st
         "big_int": "Numeric_big_int",
         "big_rat": "Numeric_big_rat",
         "tropical_min_plus": "tropical_min_plus",
+        "tropical_min_plus_big_rat": "tropical_min_plus_big_rat",
         "tropical_max_plus": "tropical_max_plus",
+        "tropical_max_plus_big_rat": "tropical_max_plus_big_rat",
     }
 
     if numeric_lc in mapping:

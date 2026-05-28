@@ -182,6 +182,42 @@ class TropicalIntGroup(OrderedGroup):
         return str(int(x)) if x == int(x) else str(x)
 
 
+class TropicalIntMaxGroup(OrderedGroup):
+    """Integer group for tropical max-plus algebra (⊕=max, ⊗=+)."""
+
+    def zero(self):
+        return float('-inf')
+
+    def one(self):
+        return 0
+
+    def add(self, x, y):
+        return max(x, y)
+
+    def neg(self, x):
+        return -x
+
+    def mul(self, x, y):
+        return x + y
+
+    def compare(self, x, y):
+        if x < y:
+            return -1
+        if x > y:
+            return 1
+        return 0
+
+    def max(self, x, y):
+        return max(x, y)
+
+    def to_string(self, x):
+        if x == float('inf'):
+            return '+inf'
+        if x == float('-inf'):
+            return '-inf'
+        return str(int(x)) if x == int(x) else str(x)
+
+
 # ==========================================================
 # ReverseOrder(Group)
 # ==========================================================

@@ -347,12 +347,19 @@ class Simplet:
             inst.reduced_costs[i] = (sign, self.G.add(value, self.G.neg(slack_i)))
 
 
-    def init(self, lp: linear_prog.LP, basic_point: np.ndarray) -> "Simplet.Instance":
+    def init(self, lp: linear_prog.LP, basic_point: np.ndarray, require_basic: bool = True) -> "Simplet.Instance":
+        """
+        Initialize a Simplet instance at a given point.
         
+        Args:
+            lp: Linear program
+            basic_point: Starting point (must be feasible; optionally basic)
+            require_basic: If True, raises error if point is not basic (default: True)
+        """
         self.G = lp.G
         tg = tangent_digraph.TangentDigraph.compute(lp, basic_point)
 
-        if not tg.is_basic_point():
+        if require_basic and not tg.is_basic_point():
             raise ValueError("input point is not a basic point")
         if not lp.is_point_feasible(basic_point, allow_all_neg=True):
             raise ValueError("input point is not feasible")
@@ -478,16 +485,41 @@ class Simplet:
         self._compute_reduced_costs(inst)
 
     def solve(self, inst: "Simplet.Instance", pivot_rule: Callable[["Simplet.Instance"], Optional[int]], out=None, max_iterations: Optional[int] = None) -> None:
-        """Iteratively pivot until optimality or ``max_iterations`` (if any) is reached."""
+        """Iteratively pivot until optimality or ``max_iterations`` is reached."""
         it = 1
+        
+        basis_history = []
+        cycle_check_window = 10
+        
         while True:
             if max_iterations is not None and it > max_iterations:
                 raise RuntimeError("maximum iterations reached")
-            if out:
+            if out and it % 50 == 0:
                 print(f"\niteration {it}", file=out)
                 self.print_status(inst, out)
+            
+            # Cycle detection
+            current_basis = tuple(sorted(
+                i for i in range(inst.lp.nb_ineq())
+                if inst.tangent_digraph.is_hyp_node(i)
+            ))
+            
+            
+            if current_basis in basis_history[-cycle_check_window:]:
+                cycle_idx = list(reversed(basis_history[-cycle_check_window:])).index(current_basis)
+                cycle_start = it - cycle_idx
+                print(f"\nCYCLING DETECTED at iteration {it}!", file=sys.stderr)
+                print(f"    Basis repeats from iteration {cycle_start}", file=sys.stderr)
+                print(f"    Cycle length: {cycle_idx}", file=sys.stderr)
+                raise RuntimeError(f"Degenerate cycling detected (cycle length {cycle_idx})")
+            
+            basis_history.append(current_basis)
+            
             leaving = pivot_rule(inst)
             if leaving is None:
                 break
             self.pivot(inst, leaving)
+
+            if it % 5 == 0:
+                print(f"[pivot {it}] ")
             it += 1

@@ -113,6 +113,25 @@ class LP:
                 return False
         return True
 
+    def first_infeasible_row(self, point: np.ndarray, allow_all_neg: bool = False) -> Optional[int]:
+        """Return the first inequality index violated by ``point``, or None if feasible."""
+        if self.dim() != len(point):
+            raise ValueError("dimension mismatch between LP and point")
+
+        for i in range(self.nb_ineq()):
+            arg = self.compute_slack_args((RowKind.INEQ, i), point)
+            pos, neg = False, False
+            for _, sign, _ in arg:
+                if sign == Sign.POS:
+                    pos = True
+                elif sign == Sign.NEG:
+                    neg = True
+            if not pos and not neg:
+                raise AssertionError("Invalid inequality row (no signs found)")
+            if neg and not pos and not allow_all_neg:
+                return i
+        return None
+
     def pretty_print(self):
         print("Problem Characteristics:\n")
         print(f"dim = {self.dim()}\nnb_ineq = {self.nb_ineq()}\n")

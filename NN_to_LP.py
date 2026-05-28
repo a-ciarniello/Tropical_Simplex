@@ -1,11 +1,32 @@
-"""Convert a trained ACAS Xu PyTorch model (.pt) into an LP consumable by the tropical simplex."""
+"""
+Convert a trained tropical MLP checkpoint (.pt) into an LP that the
+tropical simplex (python/ocaml) can read. We assume a max-plus network with
+layer weights `W` and biases via `tanh(raw_b) * b_scale` (as in TropLayer).
+
+Each neuron output y_i is constrained as the max of its tropical pre-activations:
+    y_i >= W_ij + x_j   for all j
+    y_i >= b_i
+
+Objective: maximize one chosen output neuron (default index 0).
+
+Input variables are free in [lo, hi] (defaults 0..1). Adjust via CLI flags.
+
+LP format emitted:
+    numeric: float
+    semiring: maxplus
+    vars: v1,v2,...
+    
+    lp:
+    maximize out_0;
+    ...constraints...
+"""
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -14,8 +35,11 @@ import torch
 def load_state_dict(pt_path: Path) -> Dict[str, torch.Tensor]:
     """Load a checkpoint from disk and ensure it is a state_dict mapping."""
     try:
-        state_dict = torch.load(pt_path, map_location=torch.device("cpu"))
-    except Exception as exc:
+        try:
+            state_dict = torch.load(pt_path, map_location="cpu", weights_only=True)
+        except TypeError:
+            state_dict = torch.load(pt_path, map_location="cpu")
+    except Exception as exc:  # pragma: no cover - IO guard
         raise RuntimeError(f"Unable to load '{pt_path}': {exc}") from exc
 
     if not isinstance(state_dict, dict):
@@ -23,272 +47,187 @@ def load_state_dict(pt_path: Path) -> Dict[str, torch.Tensor]:
     return state_dict
 
 
-def tensor_to_numpy(tensor: torch.Tensor) -> np.ndarray:
-    """Detach ``tensor`` from PyTorch and produce a float64 NumPy array."""
-    return tensor.detach().cpu().numpy().astype(np.float64)
+def to_numpy(t: torch.Tensor) -> np.ndarray:
+    return t.detach().cpu().numpy().astype(np.float64)
 
 
-def format_affine(constant: float, coeffs: Iterable[Tuple[float, str]], tol: float = 1e-12) -> str:
-    """Format an affine expression suitable for LP emission."""
-    parts: List[str] = []
-    if abs(constant) > tol:
-        parts.append(f"{constant:.12g}")
-    for coeff, var in coeffs:
-        if abs(coeff) <= tol:
-            continue
-        parts.append(f"{coeff:.12g} * {var}")
-    if not parts:
-        return "0"
-    return " + ".join(parts)
+def fmt(value: float) -> str:
+    """Format numbers without scientific notation (fixed 12 decimals)."""
+    return f"{value:.12f}"
 
 
-@dataclass
-class LPWriter:
-    """Helper that accumulates rows and renders them as an LP file."""
-    numeric: str = "float"
-    semiring: str | None = None
-
-    def __post_init__(self) -> None:
-        self._var_list: List[str] = []
-        self._var_set: set[str] = set()
-        self._objective: Tuple[str, str] | None = None  # (sense, expr)
-        self._lines: List[str] = []
-        self._constraint_count = 0
-
-    def add_variable(self, name: str) -> None:
-        if name in self._var_set:
-            return
-        self._var_set.add(name)
-        self._var_list.append(name)
-
-    def add_comment(self, text: str) -> None:
-        self._lines.append(f"/* {text} */")
-
-    def add_constraint(self, lhs: str, operator: str, rhs: str, comment: str | None = None) -> None:
-        if comment:
-            self.add_comment(comment)
-        self._lines.append(f"{lhs} {operator} {rhs};")
-        self._constraint_count += 1
-
-    def add_equality(self, lhs: str, rhs: str, comment: str | None = None) -> None:
-        lower = comment if comment else None
-        upper = f"{comment} (>=)" if comment else None
-        self.add_constraint(lhs, "<=", rhs, lower)
-        self.add_constraint(lhs, ">=", rhs, upper)
-
-    def add_relu(self, pre_var: str, post_var: str, comment: str) -> None:
-        self.add_constraint(post_var, ">=", pre_var, f"{comment} (lower bound)")
-        self.add_constraint(post_var, ">=", "0", None)
-        self.add_constraint(post_var, "<=", f"max({pre_var}, 0)", f"{comment} (upper bound)")
-
-    def set_objective(self, sense: str, expr: str) -> None:
-        if sense not in {"maximize", "minimize"}:
-            raise ValueError("Objective sense must be 'maximize' or 'minimize'")
-        self._objective = (sense, expr)
-
-    def render(self) -> str:
-        if not self._var_list:
-            raise ValueError("No variables declared.")
-        if self._objective is None:
-            raise ValueError("Objective not specified.")
-
-        header: List[str] = []
-        header.append(f"numeric: {self.numeric}")
-        if self.semiring:
-            header.append(f"semiring: {self.semiring}")
-        header.append(f"vars: {','.join(self._var_list)}")
-        header.append("")
-        header.append("lp:")
-        header.append("")
-
-        sense, expr = self._objective
-        body = [f"{sense} {expr};", ""] + self._lines
-        return "\n".join(header + body) + "\n"
-
-    @property
-    def stats(self) -> Tuple[int, int]:
-        return len(self._var_list), self._constraint_count
+def add_offset(base: str, coeff: float) -> str:
+    """Return a string like `base + v` or `base - v` depending on coeff sign."""
+    if coeff < 0:
+        return f"{base} - {fmt(abs(coeff))}"
+    else:
+        return f"{base} + {fmt(coeff)}"
 
 
 @dataclass
-class LayerSpec:
+class TropLayerParams:
     name: str
-    weight: np.ndarray
-    bias: np.ndarray
-    apply_relu: bool
+    weight: np.ndarray  # shape (out, in)
+    bias: np.ndarray    # shape (out,)
 
 
-class NetworkLPConverter:
-    """Convert PyTorch checkpoints into solver-friendly LP descriptions."""
-    def __init__(
-        self,
-        state_dict: Dict[str, torch.Tensor],
-        numeric: str,
-        semiring: str | None,
-        objective_index: int,
-    ) -> None:
+class TropNetConverter:
+    def __init__(self, state_dict: Dict[str, torch.Tensor], objective_index: int, input_lo: float, input_hi: float) -> None:
         self.state_dict = state_dict
-        self.numeric = numeric
-        self.semiring = semiring
         self.objective_index = objective_index
+        self.input_lo = input_lo
+        self.input_hi = input_hi
 
-    def convert(self) -> Tuple[str, Tuple[int, int], List[str]]:
-        """Emit the LP text, basic statistics, and ordered output variable names."""
-        writer = LPWriter(numeric=self.numeric, semiring=self.semiring)
-
-        means = tensor_to_numpy(self.state_dict.get("means", torch.zeros(0)))
-        ranges = tensor_to_numpy(self.state_dict.get("ranges", torch.ones_like(torch.from_numpy(means))))
-        if means.size == 0 or ranges.size == 0:
-            raise ValueError("The checkpoint does not provide 'means' and 'ranges' buffers.")
-
-        # Avoid zero division
-        ranges[ranges == 0.0] = 1.0
-
-        input_size = means.shape[0]
-        raw_inputs = [f"input_{i}" for i in range(input_size)]
-        norm_inputs = [f"norm_{i}" for i in range(input_size)]
-
-        for var in raw_inputs + norm_inputs:
-            writer.add_variable(var)
-
-        for idx, (raw_var, norm_var, mean, rng) in enumerate(zip(raw_inputs, norm_inputs, means, ranges)):
-            rhs = format_affine(mean, [(rng, norm_var)])
-            writer.add_equality(raw_var, rhs, f"Normalize input {idx}")
-
+    def convert(self) -> Tuple[str, Tuple[int, int]]:
         layers = self._collect_layers()
-        previous = norm_inputs
-        final_outputs: List[str] = []
+        if not layers:
+            raise ValueError("No tropical layers found (expected keys like '*.W' and '*.raw_b').")
 
-        for layer_idx, layer in enumerate(layers):
-            prev_count = len(previous)
-            if layer.weight.shape[1] != prev_count:
-                raise ValueError(
-                    f"Layer '{layer.name}' expects {layer.weight.shape[1]} inputs but received {prev_count}."
-                )
+        input_size = layers[0].weight.shape[1]
 
-            layer_outputs: List[str] = []
-            for neuron_idx in range(layer.weight.shape[0]):
-                pre_var = f"{layer.name}_pre_{neuron_idx}"
-                writer.add_variable(pre_var)
+        # Variable names
+        inputs = [f"x_{i}" for i in range(input_size)]
+        all_vars: List[str] = list(inputs)
 
-                coeffs = [
-                    (float(layer.weight[neuron_idx, src_idx]), previous[src_idx])
-                    for src_idx in range(prev_count)
-                ]
-                affine_expr = format_affine(float(layer.bias[neuron_idx]), coeffs)
-                writer.add_equality(pre_var, affine_expr, f"Affine map {layer.name}[{neuron_idx}]")
+        # Bias anchor fixed to 0 to avoid single-term constraints
+        bias_anchor = "bias0"
+        zero_anchor = "z0"
+        all_vars.append(bias_anchor)
+        all_vars.append(zero_anchor)
 
-                if layer.apply_relu:
-                    post_var = f"{layer.name}_act_{neuron_idx}"
-                    writer.add_variable(post_var)
-                    writer.add_relu(pre_var, post_var, f"ReLU {layer.name}[{neuron_idx}]")
-                else:
-                    post_var = f"output_{neuron_idx}"
-                    writer.add_variable(post_var)
-                    writer.add_equality(post_var, pre_var, f"Output neuron {neuron_idx}")
-                layer_outputs.append(post_var)
+        layer_outputs: List[List[str]] = []
 
-            previous = layer_outputs
-            final_outputs = layer_outputs
+        prev = inputs
+        for li, layer in enumerate(layers):
+            outs = []
+            for j in range(layer.weight.shape[0]):
+                v = f"{layer.name}_{j}"
+                outs.append(v)
+                all_vars.append(v)
+            layer_outputs.append(outs)
+            prev = outs
 
-        if not final_outputs:
-            raise ValueError("No outputs were produced; check the checkpoint contents.")
+        out_vars = layer_outputs[-1]
+        if self.objective_index < 0 or self.objective_index >= len(out_vars):
+            raise ValueError(f"objective_index {self.objective_index} out of range (0..{len(out_vars)-1})")
 
-        if self.objective_index < 0 or self.objective_index >= len(final_outputs):
-            raise ValueError(
-                f"Objective index {self.objective_index} is out of range for {len(final_outputs)} outputs."
-            )
+        lines: List[str] = []
 
-        objective_var = final_outputs[self.objective_index]
-        writer.set_objective("maximize", objective_var)
-        writer.add_comment("Add property-specific constraints below this line as needed.")
+        # Input bounds via anchors to keep both POS/NEG arcs
+        for x in inputs:
+            lines.append(f"{x} >= {add_offset(bias_anchor, self.input_lo)};")
+            lines.append(f"{x} <= {add_offset(bias_anchor, self.input_hi)};")
 
-        lp_text = writer.render()
-        stats = writer.stats
-        return lp_text, stats, final_outputs
+        # Fix bias_anchor and zero_anchor to 0 but keep arcs on both sides
+        lines.append(f"{bias_anchor} >= {add_offset(zero_anchor, 0.0)};")
+        lines.append(f"{bias_anchor} <= {add_offset(zero_anchor, 0.0)};")
+        lines.append(f"{zero_anchor} >= {add_offset(bias_anchor, 0.0)};")
+        lines.append(f"{zero_anchor} <= {add_offset(bias_anchor, 0.0)};")
 
-    def _collect_layers(self) -> List[LayerSpec]:
-        """Gather sequential layer specs from the checkpoint state dictionary."""
-        layers: List[LayerSpec] = []
-        hidden_idx = 0
-        while True:
-            w_key = f"hidden_layers.{hidden_idx}.weight"
-            b_key = f"hidden_layers.{hidden_idx}.bias"
-            if w_key not in self.state_dict:
-                break
-            weight = tensor_to_numpy(self.state_dict[w_key])
-            bias = tensor_to_numpy(self.state_dict[b_key])
-            layers.append(LayerSpec(name=f"layer{hidden_idx}", weight=weight, bias=bias, apply_relu=True))
-            hidden_idx += 1
+        # Layer constraints
+        prev_names = inputs
+        for layer, outs in zip(layers, layer_outputs):
+            W = layer.weight
+            b = layer.bias
+            for j, out_name in enumerate(outs):
+                # bias constraint via anchor variable to keep a POS and NEG arc
+                lines.append(f"{out_name} >= {add_offset(bias_anchor, b[j])};")
+                # each incoming term
+                for k, inp_name in enumerate(prev_names):
+                    lines.append(f"{out_name} >= {add_offset(inp_name, W[j, k])};")
+            prev_names = outs
 
-        out_w = self.state_dict.get("output_layer.weight")
-        out_b = self.state_dict.get("output_layer.bias")
-        if out_w is None or out_b is None:
-            raise ValueError("Missing output layer weights/bias in the checkpoint.")
+        # Objective
+        objective_var = out_vars[self.objective_index]
 
-        layers.append(
-            LayerSpec(
-                name="output_layer",
-                weight=tensor_to_numpy(out_w),
-                bias=tensor_to_numpy(out_b),
-                apply_relu=False,
-            )
-        )
+        header = [
+            "numeric: float",
+            "semiring: maxplus",
+            f"vars: {','.join(all_vars)}",
+            "",
+            "lp:",
+            "",
+            f"maximize {objective_var};",
+            "",
+        ]
+
+        lp_text = "\n".join(header + lines) + "\n"
+        stats = (len(all_vars), len(lines))
+        return lp_text, stats
+
+    def _collect_layers(self) -> List[TropLayerParams]:
+        """Collect TropLayer parameters (W, raw_b, b_scale)."""
+        layer_bases = []
+        for key in self.state_dict.keys():
+            if key.endswith(".W"):
+                base = key[:-len(".W")]
+                if f"{base}.raw_b" in self.state_dict:
+                    layer_bases.append(base)
+
+        # Preserve declared order if possible; fall back to sorted
+        layer_bases = sorted(layer_bases)
+
+        layers: List[TropLayerParams] = []
+        for base in layer_bases:
+            W = to_numpy(self.state_dict[f"{base}.W"])
+            raw_b = to_numpy(self.state_dict[f"{base}.raw_b"])
+            b_scale_tensor = self.state_dict.get(f"{base}.b_scale")
+            if b_scale_tensor is None:
+                b_scale = 3.0
+            else:
+                b_scale = float(to_numpy(b_scale_tensor).reshape(()))
+            bias = np.tanh(raw_b) * b_scale
+            layers.append(TropLayerParams(name=base.replace(".", "_"), weight=W, bias=bias))
+
         return layers
 
 
 def parse_args() -> argparse.Namespace:
-    """Configure and parse the CLI arguments."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Export a PyTorch model to a linear program."
-        )
-    )
-    parser.add_argument("pt", type=Path, nargs="?", help="Checkpoint .pt path")
+    parser = argparse.ArgumentParser(description="Export tropical MLP to LP (max-plus constraints).")
 
-    parser.add_argument(
-        "--output", "-o", type=Path, default=Path("network.lp"), help="Destination LP filename"
-    )
-    parser.add_argument(
-        "--objective-index",
-        type=int,
-        default=0,
-        help="Index of the output neuron used in the objective (default: 0)",
-    )
-    parser.add_argument(
-        "--numeric",
-        type=str,
-        default="float",
-        help="numeric: header to emit in the LP. Default: float.",
-    )
-    parser.add_argument(
-        "--semiring",
-        type=str,
-        default=None,
-        help="Optional semiring header (minplus / maxplus). Leave empty to omit.",
-    )
+    parser.add_argument("pt", 
+                        type=Path, 
+                        help="Checkpoint .pt path")
+    
+    parser.add_argument("--output",
+                        "-o", 
+                        type=Path, 
+                        default=Path("network.lp"), 
+                        help="Destination LP filename")
+    
+    parser.add_argument("--objective-index", 
+                        type=int, 
+                        default=0, 
+                        help="Index of output neuron to maximize")
+    
+    parser.add_argument("--input-lo", 
+                        type=float, 
+                        default=0.0, 
+                        help="Lower bound for each input")
+    
+    parser.add_argument("--input-hi", 
+                        type=float, 
+                        default=1.0, 
+                        help="Upper bound for each input")
     return parser.parse_args()
 
 
 def main() -> None:
-    """CLI entry point: orchestrate conversion and report statistics."""
     args = parse_args()
     state_dict = load_state_dict(args.pt)
 
-    converter = NetworkLPConverter(
+    converter = TropNetConverter(
         state_dict=state_dict,
-        numeric=args.numeric,
-        semiring=args.semiring,
         objective_index=args.objective_index,
+        input_lo=args.input_lo,
+        input_hi=args.input_hi,
     )
 
-    lp_text, stats, outputs = converter.convert()
+    lp_text, stats = converter.convert()
     args.output.write_text(lp_text, encoding="ascii")
 
-    var_count, constraint_count = stats
     print(f"LP written to '{args.output}'.")
-    print(f"Variables: {var_count} | Constraints: {constraint_count}")
-    print(f"Outputs available: {', '.join(outputs)}")
+    print(f"Variables: {stats[0]} | Constraints: {stats[1]}")
 
 
 if __name__ == "__main__":
