@@ -45,7 +45,7 @@ python tropical_abstraction.py simple_model.pt -xlb -1.0 -1.0 -xub 1.0 1.0 -o ne
 
 To help reviewers navigate the codebase and verify the claims made in the long paper, here is a mapping between the theoretical concepts and their implementation:
 
-* **Network Abstraction to Tropical Maps (Theorem 1 & Proposition 3):** The logic connecting the neural network weights to tropical rational maps is implemented in `tropical_abstraction.py`. You will find explicit comments referring to the paper's theorems within the code.
+* **Network Abstraction to Tropical Maps:** The logic connecting the neural network weights to tropical rational maps is implemented in `tropical_abstraction.py`.
 * **Tropical Simplex Algorithm:** The core logic of the solver is contained within the `simplex_python/` directory.
 * **Phase I / Phase II Perturbations:** The handling of non-generic cases and perturbed linear programming is strictly implemented in `simplex_python/perturbed_lp.py`.
 
