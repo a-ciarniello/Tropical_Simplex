@@ -1,47 +1,59 @@
-# Tropical Simplex Algorithm
+# Tropical Simplex Algorithm for Certifying Properties of ReLU-based Artificial Neural Networks
 
-This repository contains the source code for my thesis project, titled "A tropical simplex algorithm for certifying properties of ReLU-based artificial neural networks". This work explores the application of the Tropical Simplex Algorithm as a novel tool for the formal certification of Neural Network properties. The repository provides a comprehensive suite of tools designed to train both Classic (ReLU) and Tropical Multi-Layer Perceptrons (MLPs), mathematically extract tropical linear programming (TLP) constraints from them, and efficiently solve these constraints relying on a custom Python implementation of the Tropical Simplex algorithm.
-## Repository Structure
+This repository contains the official implementation of the Tropical Simplex Algorithm for the formal verification of ReLU-based Deep Neural Networks (DNNs). The framework leverages Tropical Geometry to model the decision boundaries of neural networks as tropical hypersurfaces, transforming the verification problem into a tropical linear programming problem.
 
-* **`MLP_classic.ipynb`**: Notebook to train a standard ReLU MLP on a binary subset of the MNIST dataset.
-* **`MLP_Tropical.ipynb`**: Notebook to train a custom Tropical MLP (using max-plus affine transformations and softly bounded biases) on MNIST.
-* **`tropical_abstraction.py`**: Implements the zone-based tropical abstraction for standard linear layers and exports the abstraction into a custom max-plus `.lp` format.
-* **`NN_to_LP.py`**: Converts a natively trained Tropical MLP checkpoint into an exact tropical LP representation.
-* **`simplex_python/`**: A complete, custom implementation of the Tropical Simplex algorithm in Python, featuring phase I/II perturbation methods, tangent digraph combinatorics, and custom parsing for `.lp` files.
+This artifact is submitted as part of the SEFM 2026 conference proceedings.
 
----
+## 📦 Dependencies and Environment Setup
 
-## Workflows
+The repository is modularly structured. Depending on your goal, you can run the standalone solver or the full neural network abstraction pipeline.
 
-The repository supports two main workflows depending on the architecture of the neural network being analyzed:
+### 1. Simplex Solver Only
+To run the custom tropical simplex solver (located in `simplex_python/`), the only required dependency is `numpy`. No external mathematical or optimization libraries are needed.
 
-### 1. Classic ReLU MLP Flow
-This workflow applies a zone-based tropical polyhedral abstraction to a standard ReLU network to evaluate its bounds.
+### 2. Full Verification Pipeline (Recommended)
+To run the complete pipeline, which includes training a model, abstracting the neural network, and running the verification solver (e.g., executing `MLP_classic.ipynb`, `MLP_Tropical.ipynb`, and `NN_to_LP.py`), you need a complete Python environment. 
 
-1. **Train the model**: 
-   Run the `MLP_classic.ipynb` notebook. This will train a classic MLP and save the model weights as a `.pt` file (e.g., `simple_model.pt`).
-2. **Generate the Tropical LP**: 
-   Use the `tropical_abstraction.py` script to compute the abstraction of the trained model over a specific input region (hypercube) and export it to an `.lp` file.
-   ```bash
-   python tropical_abstraction.py simple_model.pt -xlb <lower_bounds_list> -xub <upper_bounds_list> -o network.lp
-3. **Solve the constraints**:
-   Execute the custom tropical simplex solver on the generated problem to find the optimum.
-   ```bash
-   python simplex_python/main.py network.lp
+We recommend managing the environment via `conda`:
 
-### 2. Tropical MLP Flow
-This workflow builds, trains, and verifies a neural network built with native tropical layers.
+```bash
+conda create -n tropical_env python=3.10
+conda activate tropical_env
+pip install numpy torch torchvision pandas matplotlib tqdm
+```
+*(Note: You can also use `pip install -r requirements.txt` if provided).*
 
-1. **Train the model**:
-   Run the `MLP_Tropical.ipynb` notebook. This trains the TropMLP architecture and saves the weights as a `.pt` file (e.g., tropical_model.pt).
-2. **Convert to LP**:
-   Since the network is natively tropical, use `NN_to_LP.py` to directly translate the trained checkpoint into max-plus linear programming constraints.
-   ```bash
-   python NN_to_LP.py tropical_model.pt -o network_tropical.lp
-3. **Solve the constraints**:
-   Pass the resulting `.lp` file to the tropical simplex solver.
-   ```bash
-   python simplex_python/main.py network_tropical.lp
+## 🚀 Quick Start & Reproducibility
 
+To facilitate the review process, you can immediately test the tropical simplex algorithm without training a new neural network from scratch.
 
-To run the custom tropical simplex solver, no external math libraries are required beyond `numpy`.
+### Option A: Run the Solver on Pre-generated Problems
+You can directly run the simplex solver on the mathematical problems already provided in the `simplex_python/problems/` directory. For example:
+```bash
+python simplex_python/main.py simplex_python/problems/generic_lp_2D.lp
+```
+
+### Option B: End-to-End Abstraction and Verification
+If you have a pre-trained PyTorch model (e.g., `simple_model.pt`), you can abstract it and generate the linear programming formulation ready for the tropical simplex. 
+
+Here is a ready-to-run example command for abstraction:
+```bash
+python tropical_abstraction.py simple_model.pt -xlb -1.0 -1.0 -xub 1.0 1.0 -o network.lp
+```
+*Note: You can find automatically formatted CLI commands with specific bounds generated at the end of the `MLP_classic.ipynb` notebook.*
+
+## 📖 Mapping Code to the Paper Theory
+
+To help reviewers navigate the codebase and verify the claims made in the long paper, here is a mapping between the theoretical concepts and their implementation:
+
+* **Network Abstraction to Tropical Maps (Theorem 1 & Proposition 3):** The logic connecting the neural network weights to tropical rational maps is implemented in `tropical_abstraction.py`. You will find explicit comments referring to the paper's theorems within the code.
+* **Tropical Simplex Algorithm:** The core logic of the solver is contained within the `simplex_python/` directory.
+* **Phase I / Phase II Perturbations:** The handling of non-generic cases and perturbed linear programming is strictly implemented in `simplex_python/perturbed_lp.py`.
+
+## 📂 Repository Structure
+
+* `MLP_classic.ipynb` / `MLP_Tropical.ipynb`: Notebooks for training and evaluating standard and tropical MLPs (MNIST dataset).
+* `NN_to_LP.py` / `tropical_abstraction.py`: Scripts for converting the trained PyTorch neural networks into tropical linear programming formalizations.
+* `simplex_python/`: The core module containing the custom tropical simplex solver.
+    * `problems/`: Directory containing pre-formulated `.lp` test problems.
+    * `test_classes/`: Unit tests for the algebraic and solver components.
