@@ -41,14 +41,6 @@ python tropical_abstraction.py simple_model.pt -xlb -1.0 -1.0 -xub 1.0 1.0 -o ne
 ```
 *Note: You can find automatically formatted CLI commands with specific bounds generated at the end of the `MLP_classic.ipynb` notebook.*
 
-## 📖 Mapping Code to the Paper Theory
-
-To help reviewers navigate the codebase and verify the claims made in the long paper, here is a mapping between the theoretical concepts and their implementation:
-
-* **Network Abstraction to Tropical Maps:** The logic connecting the neural network weights to tropical rational maps is implemented in `tropical_abstraction.py`.
-* **Tropical Simplex Algorithm:** The core logic of the solver is contained within the `simplex_python/` directory.
-* **Phase I / Phase II Perturbations:** The handling of non-generic cases and perturbed linear programming is strictly implemented in `simplex_python/perturbed_lp.py`.
-
 ## 📂 Repository Structure
 
 * `MLP_classic.ipynb` / `MLP_Tropical.ipynb`: Notebooks for training and evaluating standard and tropical MLPs (MNIST dataset).
