@@ -2,7 +2,6 @@
 
 This repository contains the official implementation of the Tropical Simplex Algorithm for the formal verification of ReLU-based Deep Neural Networks (DNNs). The framework leverages Tropical Geometry to model the decision boundaries of neural networks as tropical hypersurfaces, transforming the verification problem into a tropical linear programming problem.
 
-This artifact is submitted as part of the SEFM 2026 conference proceedings.
 
 ## 📦 Dependencies and Environment Setup
 
@@ -12,9 +11,9 @@ The repository is modularly structured. Depending on your goal, you can run the 
 To run the custom tropical simplex solver (located in `simplex_python/`), the only required dependency is `numpy`. No external mathematical or optimization libraries are needed.
 
 ### 2. Full Verification Pipeline (Recommended)
-To run the complete pipeline, which includes training a model, abstracting the neural network, and running the verification solver (e.g., executing `MLP_classic.ipynb`, `MLP_Tropical.ipynb`, and `NN_to_LP.py`), you need a complete Python environment. 
+To run the complete pipeline, which includes training a model, abstracting the neural network, and running the verification solver (e.g., executing `MLP_classic.ipynb`, `MLP_Tropical.ipynb`, and `NN_to_LP.py`), a complete Python environment is needed. 
 
-We recommend managing the environment via `conda`:
+It is recommended to manage the environment via`conda`:
 
 ```bash
 conda create -n tropical_env python=3.10
@@ -34,7 +33,7 @@ python simplex_python/main.py simplex_python/problems/generic_lp_2D.lp
 ```
 
 ### Option B: End-to-End Abstraction and Verification
-If you have a pre-trained PyTorch model (e.g., `simple_model.pt`), you can abstract it and generate the linear programming formulation ready for the tropical simplex. 
+If you have a pre-trained PyTorch model, saved in `.pt` file extention (e.g., `simple_model.pt`), you can abstract it and generate the linear programming formulation ready for the tropical simplex. 
 
 Here is a ready-to-run example command for abstraction:
 ```bash
@@ -53,7 +52,7 @@ To help reviewers navigate the codebase and verify the claims made in the long p
 ## 📂 Repository Structure
 
 * `MLP_classic.ipynb` / `MLP_Tropical.ipynb`: Notebooks for training and evaluating standard and tropical MLPs (MNIST dataset).
-* `NN_to_LP.py` / `tropical_abstraction.py`: Scripts for converting the trained PyTorch neural networks into tropical linear programming formalizations.
+* `NN_to_LP.py` / `tropical_abstraction.py`: Scripts for converting the trained PyTorch neural networks into tropical linear programming formalizations. `NN_to_LP.py` is used for converting tropical MLPs, while `tropical_abstraction.py` is used to convert standard MLPs.
 * `simplex_python/`: The core module containing the custom tropical simplex solver.
     * `problems/`: Directory containing pre-formulated `.lp` test problems.
     * `test_classes/`: Unit tests for the algebraic and solver components.
